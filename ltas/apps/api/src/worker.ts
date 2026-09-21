@@ -6,6 +6,7 @@ import { exportEvent } from './domain/export.js';
 
 const config=readConfig();
 if(!process.env['WORKER_DATABASE_URL']) throw new Error('WORKER_DATABASE_URL is required; do not reuse the API identity.');
+const once=process.env['LTAS_WORKER_ONCE']==='yes';
 const db=createDatabase(process.env['WORKER_DATABASE_URL']);
 let stopping=false;
 process.once('SIGINT',()=>{stopping=true;});process.once('SIGTERM',()=>{stopping=true;});
@@ -17,7 +18,7 @@ async function run():Promise<void> {
       if(!rows[0]) return null;
       return tx.outboxEvent.update({where:{id:rows[0].id},data:{state:'PROCESSING',attempts:{increment:1},availableAt:new Date(Date.now()+60000)}});
     });
-    if(!event) {await delay(1000);continue;}
+    if(!event) {if(once) break;await delay(1000);continue;}
     try {
       if(event.type!=='audit.recorded') throw new Error('No consumer registered');
       await exportEvent(config.AUDIT_EXPORT_DIR,event.id,event.payload);

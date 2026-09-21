@@ -15,7 +15,7 @@ flowchart LR
 
 ## Proposed role bundles
 
-SYS = System Administrator; PO = Vice Mayor / Presiding Officer; SEC = Secretary to the Sanggunian; COU = Councilor / Sanggunian Member; CH = Committee Chairperson; CM = Committee Member; CS = Committee Secretary/Staff; LS = Legislative Staff; RO = Records Officer; LR = Legal Reviewer; MAY = Mayor's Office Authorized User; MA = Municipal Administrator; AUD = Auditor/Read-Only Reviewer; PUB = Citizen. These proposed assignments need local validation (D-03).
+SYS = System Administrator; PO = Vice Mayor / Presiding Officer; SEC = Secretary to the Sanggunian; COU = Councilor / Sanggunian Member; CH = Committee Chairperson; CM = Committee Member; CS = Committee Secretary/Staff; LS = Legislative Staff; RO = Records Officer; LR = Legal Reviewer; MAY = Mayor's Office Authorized User; MA = Municipal Administrator; AUD = Auditor/Read-Only Reviewer; PUB = Citizen. These proposed assignments need local validation ([D-03](26-DECISIONS-AND-ASSUMPTIONS.md)). The live Phase 1–2 subset (SYS, SEC, AUD, CS, LS) and the confirmation block are in [29](29-D-03-ROLE-BUNDLES.md).
 
 | Role | Default scope and boundary |
 |---|---|

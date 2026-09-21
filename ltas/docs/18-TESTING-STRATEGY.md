@@ -1,13 +1,13 @@
 # 18 — Testing strategy
 
-This document plans future tests; no application test suite exists or has been run. Requirements and acceptance criteria are in [02](02-FUNCTIONAL-REQUIREMENTS.md) and [03](03-NON-FUNCTIONAL-REQUIREMENTS.md), mapped in [27](27-TRACEABILITY-MATRIX.md). Prioritize legal-record integrity, workflow and access boundaries over arbitrary line-coverage percentages.
+This document plans tests across all phases. Phase 1 currently has Vitest unit, contract and UI-boundary suites under `apps/` and `packages/`, a live MySQL 8.4 access-gate suite in `apps/api/src/mysql.access.test.ts` (`npm run test:mysql`), and a synthetic isolated restore rehearsal (`LTAS_RESTORE_CONFIRM=ltas-restore-rehearsal npm run recovery -- rehearse`, evidence in [backup REHEARSAL-2026-09-21](../infrastructure/backup/REHEARSAL-2026-09-21.md)). That rehearsal is not a substitute for an approved RPO/RTO (D-06), off-host copies, or UAT. Requirements and acceptance criteria are in [02](02-FUNCTIONAL-REQUIREMENTS.md) and [03](03-NON-FUNCTIONAL-REQUIREMENTS.md), mapped in [27](27-TRACEABILITY-MATRIX.md). Prioritize legal-record integrity, workflow and access boundaries over arbitrary line-coverage percentages.
 
 ## Test levels and responsibilities
 
 | Level | Planned coverage | Evidence / owner |
 |---|---|---|
 | Unit | Pure state predicates, eligibility/threshold formulas, date calculations, classification and metric definitions | Deterministic fixtures and boundary cases / developers |
-| Integration | Real supported MySQL transactions/constraints, Prisma queries, MinIO staged lifecycle, Redis retries | Disposable isolated integration environment / developers |
+| Integration | Real supported MySQL transactions/constraints, Prisma queries, MinIO staged lifecycle, Redis retries | Disposable isolated integration environment / developers. Phase 1 access/revocation/scope/concurrent-grant evidence: `apps/api/src/mysql.access.test.ts`. Phase 2 numbering/version/scan evidence: `apps/api/src/mysql.measure.test.ts`. Combined: `npm run test:mysql` |
 | API contracts | DTO validation, errors, pagination, filters, revisions, idempotency and OpenAPI compatibility | Success and failure contracts / API reviewers |
 | Authorization | Every operation against role/scope/classification/term/state matrix, including combined roles and denied fields | Negative-access matrix / security reviewer |
 | Workflow | Every approved transition, rejected edge, evidence requirement, exception and profile migration | Model-based transition scenarios / secretariat + developers |

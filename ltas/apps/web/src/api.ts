@@ -9,3 +9,10 @@ export async function request<T>(path:string,options?:{method?:string;body?:unkn
   if(!response.ok) throw new ApiError(response.status,data as Problem);
   return data as T;
 }
+export async function uploadBytes(path:string, body:Blob, csrf:string):Promise<unknown> {
+  const response=await fetch(`/api/v1${path}`,{method:'PUT',credentials:'same-origin',headers:{'X-CSRF-Token':csrf,'Content-Type':'application/octet-stream'},body});
+  let data:unknown;
+  try {data=await response.json();} catch {throw new Error('The service returned an unexpected response. Please try again.');}
+  if(!response.ok) throw new ApiError(response.status,data as Problem);
+  return data;
+}

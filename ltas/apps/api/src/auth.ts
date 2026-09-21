@@ -6,6 +6,7 @@ import { permissions } from '@ltas/contracts';
 import { CONTEXT, type AppContext } from './context.js';
 import { fail, type AuthRequest } from './http.js';
 import { SessionGuard } from './access.js';
+import { originFromRequest, publicOrigins } from './config.js';
 import { can } from './domain/policy.js';
 
 @Controller('auth')
@@ -14,16 +15,21 @@ export class AuthController {
   constructor(@Inject(CONTEXT) private readonly ctx:AppContext) {}
   private client():Promise<oidc.Configuration> {
     this.discovery ??= oidc.discovery(new URL(this.ctx.config.OIDC_ISSUER),this.ctx.config.OIDC_CLIENT_ID,this.ctx.config.OIDC_CLIENT_SECRET,undefined,
-      this.ctx.config.NODE_ENV !== 'production' && this.ctx.config.OIDC_ISSUER.startsWith('http:') ? {execute:[oidc.allowInsecureRequests]} : undefined).catch(()=>{this.discovery=undefined;return fail(503,'IDENTITY_UNAVAILABLE','The identity service is unavailable. Try again later.');});
+      this.ctx.config.NODE_ENV !== 'production' && this.ctx.config.OIDC_ISSUER.startsWith('http:') ? {execute:[oidc.allowInsecureRequests]} : undefined).catch((error:unknown)=>{
+      this.discovery=undefined;
+      console.error(JSON.stringify({level:'error',code:'IDENTITY_UNAVAILABLE',errorType:error instanceof Error ? error.name : 'Unknown'}));
+      return fail(503,'IDENTITY_UNAVAILABLE','The identity service is unavailable. Try again later.');
+    });
     return this.discovery;
   }
   @Get('login')
   async login(@Req() request:AuthRequest,@Res() response:Response):Promise<void> {
     const config=await this.client();
+    const origin=originFromRequest(request.get('x-forwarded-host') ?? request.get('host'), this.ctx.config.APP_ORIGIN);
     await new Promise<void>((resolve,reject)=>request.session.regenerate(e=>e?reject(e):resolve()));
     const verifier=oidc.randomPKCECodeVerifier(),state=oidc.randomState(),nonce=oidc.randomNonce();
-    request.session.oidc={verifier,state,nonce,createdAt:Date.now()};
-    const url=oidc.buildAuthorizationUrl(config,{redirect_uri:`${this.ctx.config.APP_ORIGIN}/api/v1/auth/callback`,scope:'openid profile',code_challenge:await oidc.calculatePKCECodeChallenge(verifier),code_challenge_method:'S256',state,nonce});
+    request.session.oidc={verifier,state,nonce,createdAt:Date.now(),redirectOrigin:origin};
+    const url=oidc.buildAuthorizationUrl(config,{redirect_uri:`${origin}/api/v1/auth/callback`,scope:'openid profile',code_challenge:await oidc.calculatePKCECodeChallenge(verifier),code_challenge_method:'S256',state,nonce});
     await new Promise<void>((resolve,reject)=>request.session.save(e=>e?reject(e):resolve()));
     response.redirect(url.href);
   }
@@ -33,9 +39,10 @@ export class AuthController {
     delete request.session.oidc;
     await new Promise<void>((resolve,reject)=>request.session.save(e=>e?reject(e):resolve()));
     if(!pending || Date.now()-pending.createdAt>5*60*1000) fail(401,'LOGIN_EXPIRED','The login attempt expired. Start again.');
+    const origin=pending.redirectOrigin && publicOrigins(this.ctx.config.APP_ORIGIN).includes(pending.redirectOrigin) ? pending.redirectOrigin : new URL(this.ctx.config.APP_ORIGIN).origin;
     let claims:oidc.IDToken;
     try {
-      const tokens=await oidc.authorizationCodeGrant(await this.client(),new URL(request.originalUrl,this.ctx.config.APP_ORIGIN),{pkceCodeVerifier:pending.verifier,expectedState:pending.state,expectedNonce:pending.nonce,idTokenExpected:true});
+      const tokens=await oidc.authorizationCodeGrant(await this.client(),new URL(request.originalUrl,origin),{pkceCodeVerifier:pending.verifier,expectedState:pending.state,expectedNonce:pending.nonce,idTokenExpected:true});
       const result=tokens.claims();
       if(!result) return fail(401,'INVALID_IDENTITY','The identity response is invalid.');
       claims=result;
@@ -46,7 +53,7 @@ export class AuthController {
     request.session.identity={issuer:this.ctx.config.OIDC_ISSUER,subject:claims.sub,expiresAt:Math.min(claims.exp*1000,Date.now()+8*60*60*1000),authenticatedAt:Date.now()};
     request.session.csrfToken=randomBytes(32).toString('hex');
     await new Promise<void>((resolve,reject)=>request.session.save(e=>e?reject(e):resolve()));
-    response.redirect('/');
+    response.redirect(`${origin}/`);
   }
   @Get('session') @UseGuards(SessionGuard)
   session(@Req() request:AuthRequest) {
@@ -56,7 +63,8 @@ export class AuthController {
   @Post('logout') @UseGuards(SessionGuard)
   async logout(@Req() request:AuthRequest,@Res() response:Response):Promise<void> {
     const client=await this.client();
-    const logoutUrl=oidc.buildEndSessionUrl(client,{client_id:this.ctx.config.OIDC_CLIENT_ID,post_logout_redirect_uri:this.ctx.config.APP_ORIGIN});
+    const origin=originFromRequest(request.get('x-forwarded-host') ?? request.get('host'), this.ctx.config.APP_ORIGIN);
+    const logoutUrl=oidc.buildEndSessionUrl(client,{client_id:this.ctx.config.OIDC_CLIENT_ID,post_logout_redirect_uri:origin});
     await new Promise<void>((resolve,reject)=>request.session.destroy(e=>e?reject(e):resolve()));
     response.clearCookie('ltas.sid',{path:'/'}).json({data:{logoutUrl:logoutUrl.href}});
   }

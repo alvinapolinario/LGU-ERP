@@ -15,6 +15,8 @@
     "build": "npm run build -w @ltas/contracts && npm run build -w @ltas/api && npm run build -w @ltas/web",
     "typecheck": "npm run build -w @ltas/contracts && npm run typecheck --workspaces --if-present",
     "test": "npm run build -w @ltas/contracts && npm run test --workspaces --if-present",
+    "test:mysql": "npm run test:mysql -w @ltas/api",
+    "recovery": "node --env-file=.env scripts/recovery-rehearsal.mjs",
     "dev:api": "npm run dev -w @ltas/api",
     "dev:web": "npm run dev -w @ltas/web",
     "db:generate": "npm run db:generate -w @ltas/api",

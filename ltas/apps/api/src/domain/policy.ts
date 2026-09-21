@@ -16,3 +16,9 @@ export function independentApproval(requester:string, reviewer:string, target:st
   return requester !== reviewer && requester !== target && reviewer !== target;
 }
 export function overlaps(aStart:Date,aEnd:Date,bStart:Date,bEnd:Date):boolean {return aStart <= bEnd && bStart <= aEnd;}
+/** Grant validity uses a half-open window: validUntil is exclusive, matching `can()`. */
+export function grantWindowsConflict(aStart:Date,aEnd:Date,bStart:Date,bEnd:Date):boolean {return aStart < bEnd && bStart < aEnd;}
+export function conflictingGrant(existing:RoleGrant, proposed:{role:string;scopeType:string;scopeId:string;validFrom:Date;validUntil:Date}):boolean {
+  if (existing.revokedAt || existing.role !== proposed.role || existing.scopeType !== proposed.scopeType || existing.scopeId !== proposed.scopeId) return false;
+  return grantWindowsConflict(existing.validFrom, existing.validUntil, proposed.validFrom, proposed.validUntil);
+}

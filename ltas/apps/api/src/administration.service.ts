@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { committeeSchema, grantSchema, idSchema, memberSchema, municipalitySchema, paginationSchema, personSchema, reviewSchema, rolePermissions, termSchema, userSchema, userStateSchema } from '@ltas/contracts';
 import { CONTEXT, type AppContext } from './context.js';
 import { Commands } from './commands.js';
-import { requirePermission, SessionGuard } from './access.js';
-import { can, independentApproval, overlaps } from './domain/policy.js';
+import { requirePermission } from './access.js';
+import { can, conflictingGrant, independentApproval, overlaps } from './domain/policy.js';
 import { fail, type AuthRequest } from './http.js';
 
 @Injectable()
@@ -62,7 +62,13 @@ export class AdministrationService {
       if(new Date(input.validUntil)<=new Date()) fail(422,'GRANT_EXPIRED','The proposed grant has already expired.');
       if(input.scopeType==='MUNICIPALITY' && input.scopeId!==r.principal.municipalityId) fail(403,'INVALID_SCOPE','The grant must belong to your municipality.');
       if(input.scopeType==='COMMITTEE' && !await tx.committee.findFirst({where:{id:input.scopeId,...this.scope(r)}})) fail(404,'NOT_FOUND','Committee not found.');
-      const result=await tx.grantRequest.create({data:{...input,id:randomUUID(),municipalityId:r.principal.municipalityId,validFrom:new Date(input.validFrom),validUntil:new Date(input.validUntil),requestedBy:r.principal.id}});
+      const window={role:input.role,scopeType:input.scopeType,scopeId:input.scopeId,validFrom:new Date(input.validFrom),validUntil:new Date(input.validUntil)};
+      const [grants,pending]=await Promise.all([
+        tx.userRole.findMany({where:{userId:input.userId,role:input.role,scopeType:input.scopeType,scopeId:input.scopeId,revokedAt:null}}),
+        tx.grantRequest.findMany({where:{userId:input.userId,role:input.role,scopeType:input.scopeType,scopeId:input.scopeId,state:'PENDING'}}),
+      ]);
+      if(grants.some(g=>conflictingGrant(g,window)) || pending.some(g=>conflictingGrant({...g,revokedAt:null},window))) fail(409,'GRANT_OVERLAP','An overlapping grant already exists or is awaiting review.');
+      const result=await tx.grantRequest.create({data:{...input,id:randomUUID(),municipalityId:r.principal.municipalityId,validFrom:window.validFrom,validUntil:window.validUntil,requestedBy:r.principal.id}});
       return {entityId:result.id,result,changes:input};
     })};
   }
@@ -77,6 +83,9 @@ export class AdministrationService {
       if(decision==='approve') {
         const user=await tx.user.findFirst({where:{id:request.userId,...this.scope(r),enabled:true}});
         if(!user || request.validUntil<=new Date()) fail(422,'GRANT_NOT_APPLICABLE','The recipient is disabled or the grant expired.');
+        const window={role:request.role,scopeType:request.scopeType,scopeId:request.scopeId,validFrom:request.validFrom,validUntil:request.validUntil};
+        const grants=await tx.userRole.findMany({where:{userId:request.userId,role:request.role,scopeType:request.scopeType,scopeId:request.scopeId,revokedAt:null}});
+        if(grants.some(g=>conflictingGrant(g,window))) fail(409,'GRANT_OVERLAP','An overlapping grant already exists for this role and scope.');
         await tx.userRole.create({data:{id:randomUUID(),municipalityId:request.municipalityId,userId:request.userId,role:request.role,scopeType:request.scopeType,scopeId:request.scopeId,validFrom:request.validFrom,validUntil:request.validUntil,approvedBy:r.principal.id,requestId:id}});
         await tx.user.update({where:{id:request.userId},data:{policyVersion:{increment:1},revision:{increment:1}}});
       }
@@ -129,7 +138,7 @@ export class AdministrationService {
     const ids=r.principal.grants.filter(g=>g.scopeType==='COMMITTEE' && can(r.principal,'committee.view',{...scope,committeeId:g.scopeId})).map(g=>g.scopeId);
     if(!full && !ids.length) fail(403,'ACCESS_DENIED','You do not have committee access.');
     const where={...scope,...(!full?{id:{in:ids}}:{})};
-    const [items,total]=await this.ctx.db.$transaction([this.ctx.db.committee.findMany({where,include:{term:true},skip:(page-1)*limit,take:limit,orderBy:[{name:'asc'},{id:'asc'}]}),this.ctx.db.committee.count({where})]);return {items,pageInfo:{page,limit,total}};
+    const [items,total]=await this.ctx.db.$transaction([this.ctx.db.committee.findMany({where,include:{term:true,members:{include:{person:true},orderBy:[{startsOn:'desc'},{id:'asc'}]}},skip:(page-1)*limit,take:limit,orderBy:[{name:'asc'},{id:'asc'}]}),this.ctx.db.committee.count({where})]);return {items,pageInfo:{page,limit,total}};
   }
   async committee(r:AuthRequest,rawId:string) {
     const id=idSchema.parse(rawId);

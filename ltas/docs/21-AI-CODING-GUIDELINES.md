@@ -1,6 +1,6 @@
 # 21 — AI coding assistant guidelines
 
-Use this repository as development context only after the user authorizes implementation. Current status is **PLANNING / ARCHITECTURE PHASE**. Do not infer implementation authorization from the presence of a roadmap or empty application folders.
+Use this repository as development context for the **authorized Phase 1 foundation and Phase 2 constrained measures slice**. Do not implement Phases 3–10, production deployment, or policy guesses from the presence of a roadmap. Municipal legal/authority choices remain TBD until the responsible stakeholder records them.
 
 ## Required context before a change
 

@@ -20,6 +20,13 @@ model Municipality {
   persons Person[]
   committees Committee[]
   auditCursor AuditCursor?
+  measureTypes MeasureType[]
+  measures LegislativeMeasure[]
+  workflowProfiles WorkflowProfile[]
+  numberSequences NumberSequence[]
+  documents Document[]
+  tasks WorkTask[]
+  notifications InAppNotification[]
   @@map("municipalities")
 }
 model User {
@@ -35,6 +42,8 @@ model User {
   createdAt DateTime @default(now()) @db.DateTime(3)
   updatedAt DateTime @updatedAt @db.DateTime(3)
   grants UserRole[]
+  assignedTasks WorkTask[]
+  notices InAppNotification[]
   @@unique([issuer,subject])
   @@unique([id,municipalityId])
   @@index([municipalityId,enabled])
@@ -86,6 +95,7 @@ model CouncilTerm {
   revision Int @default(1)
   createdAt DateTime @default(now()) @db.DateTime(3)
   committees Committee[]
+  measures LegislativeMeasure[]
   @@unique([municipalityId,label])
   @@unique([id,municipalityId])
   @@map("council_terms")
@@ -97,6 +107,7 @@ model Person {
   displayName String @db.VarChar(160)
   createdAt DateTime @default(now()) @db.DateTime(3)
   members CommitteeMember[]
+  attributions MeasureAuthor[]
   @@unique([id,municipalityId])
   @@index([municipalityId,displayName])
   @@map("persons")
@@ -185,4 +196,229 @@ model IdempotencyRecord {
   createdAt DateTime @default(now()) @db.DateTime(3)
   @@unique([actorId,action,key])
   @@map("idempotency_records")
+}
+model MeasureType {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  code String @db.VarChar(20)
+  label String @db.VarChar(80)
+  retiredAt DateTime? @db.DateTime(3)
+  measures LegislativeMeasure[]
+  @@unique([municipalityId,code])
+  @@map("measure_types")
+}
+model LegislativeMeasure {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  typeId String @db.Char(36)
+  type MeasureType @relation(fields:[typeId], references:[id], onDelete:Restrict)
+  typeCode String @db.VarChar(20)
+  termId String @db.Char(36)
+  term CouncilTerm @relation(fields:[termId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  title String @db.VarChar(240)
+  subject String @db.VarChar(500)
+  stage String @db.VarChar(20)
+  classification String @default("INTERNAL") @db.VarChar(30)
+  officialSeries String? @db.VarChar(30)
+  officialYear Int?
+  officialNumber Int?
+  currentVersionId String? @db.Char(36)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
+  authors MeasureAuthor[]
+  versions MeasureVersion[]
+  history MeasureStatusHistory[]
+  workflow WorkflowInstance?
+  documents Document[]
+  tasks WorkTask[]
+  @@unique([id,municipalityId])
+  @@unique([municipalityId,officialSeries,officialYear,officialNumber], map:"measures_official_number_key")
+  @@index([municipalityId,stage,createdAt])
+  @@map("legislative_measures")
+}
+model MeasureAuthor {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  measureId String @db.Char(36)
+  measure LegislativeMeasure @relation(fields:[measureId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  personId String @db.Char(36)
+  person Person @relation(fields:[personId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  role String @db.VarChar(20)
+  ordering Int
+  displayName String @db.VarChar(160)
+  @@unique([measureId,personId,role])
+  @@map("measure_authors")
+}
+model MeasureVersion {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  measureId String @db.Char(36)
+  measure LegislativeMeasure @relation(fields:[measureId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  sequence Int
+  parentVersionId String? @db.Char(36)
+  synopsis String @db.VarChar(8000)
+  primaryDocumentVersionId String? @db.Char(36)
+  frozenAt DateTime? @db.DateTime(3)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@unique([measureId,sequence])
+  @@map("measure_versions")
+}
+model MeasureStatusHistory {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  measureId String @db.Char(36)
+  measure LegislativeMeasure @relation(fields:[measureId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  sequence Int
+  fromStage String? @db.VarChar(20)
+  toStage String @db.VarChar(20)
+  profileVersionId String @db.Char(36)
+  actorId String @db.Char(36)
+  reason String @db.VarChar(500)
+  recordedAt DateTime @db.DateTime(3)
+  @@unique([measureId,sequence])
+  @@index([measureId,recordedAt])
+  @@map("measure_status_history")
+}
+model WorkflowProfile {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  code String @db.VarChar(40)
+  description String @db.VarChar(240)
+  versions WorkflowProfileVersion[]
+  @@unique([municipalityId,code])
+  @@map("workflow_profiles")
+}
+model WorkflowProfileVersion {
+  id String @id @db.Char(36)
+  profileId String @db.Char(36)
+  profile WorkflowProfile @relation(fields:[profileId], references:[id], onDelete:Restrict)
+  version Int
+  state String @db.VarChar(20)
+  authorityNote String @db.VarChar(240)
+  transitions WorkflowTransition[]
+  instances WorkflowInstance[]
+  @@unique([profileId,version])
+  @@map("workflow_profile_versions")
+}
+model WorkflowTransition {
+  id String @id @db.Char(36)
+  profileVersionId String @db.Char(36)
+  profileVersion WorkflowProfileVersion @relation(fields:[profileVersionId], references:[id], onDelete:Restrict)
+  code String @db.VarChar(30)
+  fromStage String @db.VarChar(20)
+  toStage String @db.VarChar(20)
+  permission String @db.VarChar(40)
+  @@unique([profileVersionId,code,fromStage])
+  @@map("workflow_transitions")
+}
+model WorkflowInstance {
+  id String @id @db.Char(36)
+  measureId String @unique @db.Char(36)
+  measure LegislativeMeasure @relation(fields:[measureId], references:[id], onDelete:Restrict)
+  profileVersionId String @db.Char(36)
+  profileVersion WorkflowProfileVersion @relation(fields:[profileVersionId], references:[id], onDelete:Restrict)
+  active Boolean @default(true)
+  @@map("workflow_instances")
+}
+model NumberSequence {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  series String @db.VarChar(30)
+  typeCode String @db.VarChar(20)
+  year Int
+  nextValue Int
+  revision Int @default(1)
+  @@unique([municipalityId,series,typeCode,year])
+  @@map("number_sequences")
+}
+model Document {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  ownerType String @db.VarChar(20)
+  ownerId String @db.Char(36)
+  measureId String? @db.Char(36)
+  measure LegislativeMeasure? @relation(fields:[measureId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  title String @db.VarChar(200)
+  classification String @db.VarChar(30)
+  currentReadyVersionId String? @db.Char(36)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  versions DocumentVersion[]
+  @@index([ownerType,ownerId])
+  @@map("documents")
+}
+model DocumentVersion {
+  id String @id @db.Char(36)
+  documentId String @db.Char(36)
+  document Document @relation(fields:[documentId], references:[id], onDelete:Restrict)
+  sequence Int
+  bucket String @db.VarChar(80)
+  objectKey String @db.VarChar(255)
+  sha256 String @db.Char(64)
+  bytes Int
+  detectedMime String @db.VarChar(120)
+  originalFilename String @db.VarChar(200)
+  uploadedBy String @db.Char(36)
+  validationState String @db.VarChar(20)
+  scanVerdict String @db.VarChar(20)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@unique([documentId,sequence])
+  @@unique([bucket,objectKey])
+  @@index([sha256])
+  @@map("document_versions")
+}
+model UploadSession {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  uploaderId String @db.Char(36)
+  ownerType String @db.VarChar(20)
+  ownerId String @db.Char(36)
+  originalFilename String @db.VarChar(200)
+  declaredMime String @db.VarChar(120)
+  expectedBytes Int
+  quarantineKey String @unique @db.VarChar(255)
+  status String @db.VarChar(20)
+  expiresAt DateTime @db.DateTime(3)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@index([status,expiresAt])
+  @@map("upload_sessions")
+}
+model WorkTask {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  ownerType String @db.VarChar(20)
+  ownerId String @db.Char(36)
+  measureId String? @db.Char(36)
+  measure LegislativeMeasure? @relation(fields:[measureId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  title String @db.VarChar(240)
+  state String @db.VarChar(20)
+  assigneeId String? @db.Char(36)
+  assignee User? @relation(fields:[assigneeId], references:[id], onDelete:Restrict)
+  completionNote String? @db.VarChar(500)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@index([assigneeId,state])
+  @@index([ownerType,ownerId])
+  @@map("tasks")
+}
+model InAppNotification {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  userId String @db.Char(36)
+  user User @relation(fields:[userId], references:[id], onDelete:Restrict)
+  eventKey String @db.VarChar(80)
+  summary String @db.VarChar(240)
+  ownerType String @db.VarChar(20)
+  ownerId String @db.Char(36)
+  readAt DateTime? @db.DateTime(3)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@index([userId,createdAt])
+  @@map("notifications")
 }

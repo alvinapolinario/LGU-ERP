@@ -67,7 +67,7 @@ Phase numbers refer to [19](19-DEVELOPMENT-ROADMAP.md). API paths refer to [09](
 
 ## Maintenance and acceptance ownership
 
-When implementation begins, add work-item/PR references and executed evidence locations without replacing these IDs. Requirements changing meaning receive reviewed revisions; new behavior receives new IDs. A missing entity/API/test mapping is a design gap to resolve before coding. Phase acceptance includes all applicable earlier controls, not just new features.
+When implementation of a row begins, record evidence in [28](28-PHASE-1-FOUNDATION.md) or [30](30-PHASE-2-MEASURES.md) without replacing these IDs. Requirements changing meaning receive reviewed revisions; new behavior receives new IDs. A missing entity/API/test mapping is a design gap to resolve before coding. Phase acceptance includes all applicable earlier controls, not just new features.
 
 The Secretary/product lead owns business acceptance; the presiding officer and legal reviewer approve procedural scenarios; records/privacy owners accept preservation/disclosure behavior; IT accepts operational evidence; security/audit reviewers verify access and integrity controls. A passing test is evidence for acceptance, not a substitute for policy approval.
 

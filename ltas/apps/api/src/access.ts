@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Inject, Injectable } from '@nestjs/commo
 import { timingSafeEqual } from 'node:crypto';
 import { CONTEXT, type AppContext } from './context.js';
 import { fail, type AuthRequest } from './http.js';
+import { isAllowedOrigin } from './config.js';
 import { can, type Principal, type Scope } from './domain/policy.js';
 import type { Permission } from '@ltas/contracts';
 import type { Prisma } from './database.js';
@@ -30,7 +31,7 @@ export class SessionGuard implements CanActivate {
     if(!user?.enabled) fail(401,'ACCOUNT_DISABLED','Your account is unavailable. Contact your administrator.');
     request.principal=user;
     if(!['GET','HEAD','OPTIONS'].includes(request.method)) {
-      if(request.get('origin') !== new URL(this.ctx.config.APP_ORIGIN).origin || !csrfMatches(request.session.csrfToken,request.get('x-csrf-token'))) fail(403,'CSRF_REJECTED','Reload the page before submitting this action.');
+      if(!isAllowedOrigin(request.get('origin'), this.ctx.config.APP_ORIGIN) || !csrfMatches(request.session.csrfToken,request.get('x-csrf-token'))) fail(403,'CSRF_REJECTED','Reload the page before submitting this action.');
     }
     return true;
   }

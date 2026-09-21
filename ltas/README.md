@@ -1,21 +1,23 @@
 # Legislative Tracking and Analysis System (LTAS)
 
-**Status: PLANNING / ARCHITECTURE PHASE**  
-**No production application implementation has started.**
+**Status: PHASE 1–2 IMPLEMENTATION** — platform foundation and constrained draft measures.  
+Official numbering, IRP, malware scanning, MFA, readings, referrals, voting, and the public portal are not in this slice.
 
-LTAS is a proposed Municipal Legislative Management Platform for a Philippine municipality and its Sangguniang Bayan. Each legislative measure is a digital case file containing its text, versions, deliberations, decisions, evidence, deadlines, and chronological history. This repository currently contains Markdown planning documents and empty directories only. It does not contain an executable application, infrastructure configuration, migrations, or installed dependencies.
+LTAS is a Municipal Legislative Management Platform for a Philippine municipality and its Sangguniang Bayan. Each legislative measure is a digital case file. Phase 1 ships identity, scoped access, municipal structure, committee roster, and attributable audit. Phase 2 adds draft case files, versions, in-app tasks, and quarantined uploads.
+
+Implementation was authorized on 2026-09-21. This is not production, municipal policy approval, or Phase 1 acceptance. Open decisions remain in [26](docs/26-DECISIONS-AND-ASSUMPTIONS.md). How to run, what is in scope, and remaining gates are in [28 Phase 1 foundation](docs/28-PHASE-1-FOUNDATION.md).
 
 ## Objectives
 
-- Support registration through deliberation, enactment, post-approval tracking, archives, and codification.
+- Support registration through deliberation, enactment, post-approval tracking, archives, and codification (Phases 2–7).
 - Preserve the provenance of official records and make every consequential action attributable.
 - Help authorized officials apply their approved rules without software declaring legal validity.
-- Provide a separately reviewed public legislative record and descriptive operational analytics.
+- Provide a separately reviewed public legislative record and descriptive operational analytics (later phases).
 - Establish boundaries for eventual municipal ecosystem integrations without implementing other systems.
 
 ## Architecture and technology
 
-One NestJS modular monolith owns the transactional domain. React applications provide authenticated operations and a separate public experience. MySQL is the primary transactional database; Prisma is the ORM. MinIO stores immutable file versions; MySQL stores their metadata. Redis supports recoverable background work and disposable caches. Keycloak supplies identity and future multi-application SSO. Public endpoints read approved publication snapshots only.
+One NestJS modular monolith owns the transactional domain. React applications provide authenticated operations and a later separate public experience. MySQL is the primary transactional database; Prisma is the ORM. MinIO stores quarantined file bytes in Phase 2; MySQL stores metadata. Redis supports sessions and recoverable background work. Keycloak supplies identity. Public endpoints are not served in Phase 1.
 
 | Layer | Planned technology |
 |---|---|
@@ -28,36 +30,33 @@ One NestJS modular monolith owns the transactional domain. React applications pr
 | Hosting | Ubuntu Server, Docker, Docker Compose, Nginx, Git |
 | Future only | OpenSearch; Python/FastAPI, embeddings and LLM integrations |
 
-Exact versions, support arrangements, licensing review, and compatibility tests are Phase 1 decisions. PostgreSQL and a microservices-first topology are outside this design.
+Phase 1 uses React, Vite, TanStack Query, Lucide, Zod, NestJS, Prisma, MySQL, Redis, and Keycloak. Phase 2 adds MinIO for quarantined uploads. Tailwind, shadcn/ui, TanStack Table, React Hook Form, and Recharts remain for later UI work. Exact support arrangements and licensing review stay D-12. PostgreSQL and a microservices-first topology are outside this design.
 
-## Modules
+## Phase 1 modules
 
-Dashboard; legislative measures and versions; workflow and deadlines; sessions and agenda; committees; hearings; attendance and voting; mayoral action; provincial review; posting, publication and effectivity; documents; e-Library and codification; reports; notifications and tasks; audit; access administration; public releases and portal.
+Municipality profile; council terms; historical people; committee roster; user linking; dual-control grants; hash-chained audit; outbox export; authenticated workspace.
+
+Not in Phase 1: measures, workflow, documents, hearings, sessions, voting, post-approval, e-Library, reports, public portal.
 
 ## Repository structure
 
-| Directory | Intended responsibility |
+| Directory | Responsibility |
 |---|---|
 | `apps/web/` | Authenticated municipal workspace |
-| `apps/api/` | Single modular-monolith backend and same-codebase worker entry point |
-| `apps/public-portal/` | Public-only frontend with its own build and host |
-| `packages/ui/` | Shared accessible visual primitives, no business authorization |
-| `packages/types/` | Public contract types, never Prisma-generated models |
-| `packages/validation/` | Shareable input constraints; server remains authoritative |
-| `packages/api-client/` | Versioned client contracts and error handling |
-| `packages/config/` | Shared lint/compiler conventions; no secrets |
-| `infrastructure/docker/` | Future Compose definitions and pinned images |
-| `infrastructure/nginx/` | Future proxy, TLS, host and route isolation |
-| `infrastructure/database/` | Future operational database procedures; migrations live with API |
-| `infrastructure/backup/` | Future backup and recovery procedures |
-| `docs/` | Authoritative numbered planning baseline |
-| `docs/architecture`, `requirements`, `modules`, `database`, `api`, `security`, `deployment`, `workflows` | Reserved for later detailed specifications; numbered documents remain canonical |
+| `apps/api/` | Modular-monolith backend and same-codebase worker |
+| `packages/contracts/` | Shared Zod contracts and DTO types |
+| `infrastructure/docker/` | Compose definitions for MySQL, Redis, Keycloak; optional MinIO |
+| `infrastructure/nginx/` | Staging reverse-proxy example |
+| `infrastructure/database/` | Database bootstrap and runtime grants |
+| `infrastructure/backup/` | Recovery rehearsal procedure and redacted T-NFR-RECOVERY-001 evidence |
+| `docs/` | Authoritative numbered planning baseline plus Phase 1 handoff |
+| `scripts/` | Local env generation, Keycloak provisioning, audit verification, isolated restore |
 
-Empty directories exist locally but Git does not preserve them. Future development creates files there when authorized; no placeholder application code is necessary.
+`apps/public-portal/` and additional shared packages are created when those phases are authorized.
 
 ## Reading order and document index
 
-Start with overview, requirements, architecture, workflow, database, permissions, and traceability. A **TBD** blocks only the phase or action identified in the decision register. It is not permission for an AI assistant to guess a policy.
+Start with overview, requirements, architecture, workflow, database, permissions, traceability, and the [Phase 1 handoff](docs/28-PHASE-1-FOUNDATION.md). A **TBD** blocks only the phase or action identified in the decision register. It is not permission for an AI assistant to guess a policy.
 
 | Document | Purpose |
 |---|---|
@@ -81,7 +80,7 @@ Start with overview, requirements, architecture, workflow, database, permissions
 | [17 Backup and recovery](docs/17-BACKUP-AND-DISASTER-RECOVERY.md) | Coordinated recovery and options |
 | [18 Testing strategy](docs/18-TESTING-STRATEGY.md) | Risk-based verification and release gates |
 | [19 Development roadmap](docs/19-DEVELOPMENT-ROADMAP.md) | Phase dependencies and acceptance |
-| [20 Coding standards](docs/20-CODING-STANDARDS.md) | Future engineering conventions |
+| [20 Coding standards](docs/20-CODING-STANDARDS.md) | Engineering conventions |
 | [21 AI coding guidelines](docs/21-AI-CODING-GUIDELINES.md) | Implementation context and constraints |
 | [22 Risk register](docs/22-RISK-REGISTER.md) | Owners, mitigation and indicators |
 | [23 Future roadmap](docs/23-FUTURE-ROADMAP.md) | Deferred features and extraction criteria |
@@ -89,12 +88,15 @@ Start with overview, requirements, architecture, workflow, database, permissions
 | [25 Sources and rule validation](docs/25-SOURCES-AND-RULE-VALIDATION.md) | Reference evidence and local validation |
 | [26 Decisions and assumptions](docs/26-DECISIONS-AND-ASSUMPTIONS.md) | Accepted design choices and open decisions |
 | [27 Traceability matrix](docs/27-TRACEABILITY-MATRIX.md) | Requirement-to-delivery mapping |
+| [28 Phase 1 foundation](docs/28-PHASE-1-FOUNDATION.md) | Implementation status, runbook and remaining gates |
+| [29 D-03 role bundles](docs/29-D-03-ROLE-BUNDLES.md) | Working paper: Phase 1 interim roles and emergency access |
+| [30 Phase 2 measures](docs/30-PHASE-2-MEASURES.md) | Draft case files, versions, quarantined uploads |
 | [Documentation index](docs/README.md) | Baseline maintenance and precedence |
 
 ## Development phases
 
-0 Architecture and requirements; 1 Platform foundation; 2 Measures and documents; 3 Committees and hearings; 4 Sessions; 5 Voting; 6 Post-approval workflow; 7 e-Library and codification; 8 Reports; 9 Public portal; 10 Production readiness. Security, testing, audit and restore exercises begin before their release gates, not only in Phase 10. AI intelligence is a separate future phase. Phase 6 is the proposed internal lifecycle MVP; a public service release includes Phases 7–10. Dates and staffing remain TBD.
+0 Architecture and requirements; 1 Platform foundation; **2 Measures and documents (current engineering)**; 3 Committees and hearings; 4 Sessions; 5 Voting; 6 Post-approval workflow; 7 e-Library and codification; 8 Reports; 9 Public portal; 10 Production readiness. Security, testing, audit and restore exercises begin before their release gates, not only in Phase 10. AI intelligence is a separate future phase.
 
-## Next planning action
+## Next action
 
-Run a requirements and rules-validation workshop with the Secretary to the Sanggunian, presiding officer, legal reviewer, records officer, IT administrator, and privacy officer. Approve sample ordinance/resolution journeys, authority assignments, rule profiles, disclosure policy, and recovery objectives before implementation authorization.
+Follow [28](docs/28-PHASE-1-FOUNDATION.md) to run the synthetic foundation locally. Phase 2 draft measures are in [30](docs/30-PHASE-2-MEASURES.md). D-03 is open as a working paper in [29](docs/29-D-03-ROLE-BUNDLES.md) (not yet signed). Remaining gates: D-03 confirmation, D-04 numbering, D-05/D-09/D-12/D-13/D-16. MySQL-backed access checks are `npm run test:mysql`. Isolated restore rehearsal is `LTAS_RESTORE_CONFIRM=ltas-restore-rehearsal npm run recovery -- rehearse`.

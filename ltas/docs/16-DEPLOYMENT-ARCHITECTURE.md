@@ -1,6 +1,6 @@
 # 16 — Planned deployment architecture
 
-Planning only: no images pulled, containers created, packages installed or deployment commands executed. Target Ubuntu Server, Docker, Docker Compose and Nginx. Start with a manageable single-host deployment if approved availability/risk permits; it is a single failure domain, not high availability.
+Phase 1 provides a local Compose skeleton and an Nginx example. No production images have been released. Target Ubuntu Server, Docker, Docker Compose and Nginx. Start with a manageable single-host deployment if approved availability/risk permits; it is a single failure domain, not high availability.
 
 ```mermaid
 flowchart TD

@@ -1,0 +1,53 @@
+# Isolated recovery project. Keep image pins identical to compose.dev.yml.
+# Never point this file at the ltas-development volumes or ports 3307/6380/8081.
+name: ltas-restore-rehearsal
+services:
+  mysql:
+    image: mysql:8.4.11
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Generate .env first}
+      MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD:?Generate .env first}
+      MYSQL_MIGRATION_PASSWORD: ${MYSQL_MIGRATION_PASSWORD:?Generate .env first}
+      MYSQL_WORKER_PASSWORD: ${MYSQL_WORKER_PASSWORD:?Generate .env first}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Generate .env first}
+    ports: ["127.0.0.1:3308:3306"]
+    volumes:
+      - restore-mysql-data:/var/lib/mysql
+      - ../database/init-databases.sh:/docker-entrypoint-initdb.d/01-ltas.sh:ro
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci", "--default-time-zone=+00:00"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -uroot -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+  redis:
+    image: redis:7.4.11-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Generate .env first}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly no --save ''"]
+    ports: ["127.0.0.1:6381:6379"]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  keycloak:
+    profiles: ["identity"]
+    image: quay.io/keycloak/keycloak:26.7.4
+    command: ["start-dev", "--http-port=8080"]
+    environment:
+      KC_DB: mysql
+      KC_DB_URL: jdbc:mysql://mysql:3306/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Generate .env first}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?Generate .env first}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Generate .env first}
+      KC_HOSTNAME: http://localhost:8082
+    ports: ["127.0.0.1:8082:8080", "[::1]:8082:8080"]
+    depends_on:
+      mysql: {condition: service_healthy}
+    restart: unless-stopped
+volumes:
+  restore-mysql-data:

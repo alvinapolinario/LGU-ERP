@@ -1,6 +1,6 @@
 # 20 — Standards for future development
 
-These standards apply after implementation is authorized. This phase contains no application code, migrations or executable configuration.
+These standards apply to authorized implementation. Phase 1 foundation code lives under `apps/` and `packages/contracts/`. Later phases must not treat that code as permission to add measures, uploads or public routes.
 
 ## TypeScript, organization and contracts
 
@@ -34,6 +34,6 @@ Validate environment configuration at startup; fail safely when required secrets
 
 ## Migrations
 
-Prisma migrations are introduced only in implementation. Review generated SQL, lock/backfill cost and compatibility against representative MySQL data. Prefer additive changes, explicit backfill validation and later cleanup; never silently reset a production database. Record backup/restore and forward-fix strategy before incompatible changes. Existing official numbers, hashes, certification references and audit history must survive upgrades. Keycloak schema upgrades remain its own managed lifecycle.
+Prisma migrations are reviewed with the change that needs them. Review generated SQL, lock/backfill cost and compatibility against representative MySQL data. Prefer additive changes, explicit backfill validation and later cleanup; never silently reset a production database. Record backup/restore and forward-fix strategy before incompatible changes. Existing official numbers, hashes, certification references and audit history must survive upgrades. Keycloak schema upgrades remain its own managed lifecycle.
 
 Related: [AI guidelines](21-AI-CODING-GUIDELINES.md), [tests](18-TESTING-STRATEGY.md), [architecture](04-SYSTEM-ARCHITECTURE.md).

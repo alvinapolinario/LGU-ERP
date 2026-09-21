@@ -9,6 +9,10 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(32),
   AUDIT_EXPORT_DIR: z.string().min(1),
   AUDIT_MAX_LAG_SECONDS: z.coerce.number().int().min(60).default(3600),
+  MINIO_ENDPOINT: z.string().url().optional(),
+  MINIO_ACCESS_KEY: z.string().min(3).optional(),
+  MINIO_SECRET_KEY: z.string().min(8).optional(),
+  MINIO_BUCKET_QUARANTINE: z.string().min(3).default('ltas-quarantine'),
 });
 export type Config = z.infer<typeof schema>;
 export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -23,4 +27,26 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (new URL(c.DATABASE_URL).protocol !== 'mysql:') throw new Error('MySQL is required');
   if (new URL(c.DATABASE_URL).username === 'root') throw new Error('The application must not use the database root account');
   return c;
+}
+
+export function publicOrigins(appOrigin: string): string[] {
+  const url = new URL(appOrigin);
+  const origins = [url.origin];
+  const port = url.port ? `:${url.port}` : '';
+  if (url.protocol === 'http:' && url.hostname === 'localhost') origins.push(`http://127.0.0.1${port}`);
+  if (url.protocol === 'http:' && url.hostname === '127.0.0.1') origins.push(`http://localhost${port}`);
+  return origins;
+}
+
+export function originFromRequest(hostHeader: string | undefined, appOrigin: string): string {
+  const allowed = publicOrigins(appOrigin);
+  if (hostHeader) {
+    const candidate = `${new URL(appOrigin).protocol}//${hostHeader.split(',')[0]!.trim()}`;
+    if (allowed.includes(candidate)) return candidate;
+  }
+  return new URL(appOrigin).origin;
+}
+
+export function isAllowedOrigin(originHeader: string | undefined, appOrigin: string): boolean {
+  return Boolean(originHeader && publicOrigins(appOrigin).includes(originHeader));
 }

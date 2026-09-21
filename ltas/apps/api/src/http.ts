@@ -6,7 +6,7 @@ import type { Principal } from './domain/policy.js';
 
 export interface Identity {issuer:string; subject:string; expiresAt:number; authenticatedAt:number;}
 declare module 'express-session' {
-  interface SessionData {identity?:Identity; csrfToken?:string; oidc?:{state:string;nonce:string;verifier:string;createdAt:number};}
+  interface SessionData {identity?:Identity; csrfToken?:string; oidc?:{state:string;nonce:string;verifier:string;createdAt:number;redirectOrigin:string};}
 }
 export interface AuthRequest extends Request {principal:Principal; correlationId:string;}
 export function fail(status:number,code:string,detail:string):never {throw new HttpException({code,detail},status);}

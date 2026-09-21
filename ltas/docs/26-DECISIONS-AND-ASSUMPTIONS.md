@@ -19,7 +19,8 @@ Baseline date: 2026-09-21. “Fixed” means required by the supplied task. “S
 | ADR-11 | Fixed | MySQL structured/full-text search initially; AI/OpenSearch deferred | Metadata fallback for scans; future adapters only |
 | ADR-12 | Selected design | Single municipality per installation; stable municipality scope throughout | Future multi-tenancy requires new security/operations review |
 | ADR-13 | Selected design | Secretary-entered roll-call record as initial voting mode | Self-cast/remote voting disabled until specifically approved |
-| ADR-14 | Selected design | One Ubuntu/Compose host is candidate initial topology | Single failure domain; off-host backups mandatory; final hosting TBD |
+| ADR-15 | Selected design | Phase 1 implementation authorized 2026-09-21; software role subset was SYS, SEC, AUD, CS until Phase 2 | Broader roles in [06](06-USER-ROLES-AND-PERMISSIONS.md) stay inactive except LS |
+| ADR-16 | Selected design | Phase 2 measures engineering authorized 2026-09-21; live roles SYS, SEC, AUD, CS, **LS**. Official numbering, IRP, scanner, MFA, and D-03 signatures remain TBD | See [30](30-PHASE-2-MEASURES.md). `measure.file` fails closed without D-04. Uploads stay quarantined without D-13 |
 
 ## Assumptions to validate
 
@@ -39,10 +40,10 @@ Baseline date: 2026-09-21. “Fixed” means required by the supplied task. “S
 |---|---|---|---|---|
 | D-01 | Municipality identity, scope, official branding and product sponsor | Municipal sponsor / Secretary | P0 approval | TBD |
 | D-02 | Adopted IRP, measure subtypes, readings/urgency, legal sources, applicability and approved rule values | Legal reviewer / Sanggunian authority | Before affected workflow activation, P2–6 | TBD |
-| D-03 | Actual role bundles, certification/signatory authority, independent reviewers, delegation and emergency access | Secretary / presiding officer / IT | P1 access baseline | TBD |
+| D-03 | Actual role bundles, certification/signatory authority, independent reviewers, delegation and emergency access | Secretary / presiding officer / IT | P1 access baseline | Working paper [29](29-D-03-ROLE-BUNDLES.md) opened 2026-09-21; Q1–Q8 proposed. Signatures deferred. **LS live in software** for Phase 2 draft work (Q8). Other 06 roles inactive. |
 | D-04 | Numbering series by type/year/term, historical duplicates and correction policy | Secretary / records officer | P2 filing | TBD |
 | D-05 | Hosting site/hardware, domains, staff remote access, network/power, email provider and support hours | IT / sponsor | P1 staging and P10 launch | TBD |
-| D-06 | Chosen RPO/RTO, backup transfer frequency, recovery host and exercise frequency | Sponsor / IT / records officer | Before real-data pilot | TBD; options in 17 |
+| D-06 | Chosen RPO/RTO, backup transfer frequency, recovery host and exercise frequency | Sponsor / IT / records officer | Before real-data pilot | TBD; options in 17. Synthetic isolated restore recorded 2026-09-21 in [REHEARSAL-2026-09-21](../infrastructure/backup/REHEARSAL-2026-09-21.md); that does not select RPO/RTO. |
 | D-07 | Official records schedule, audit/backup/log retention, holds, disposition authority and off-site custody | Records / privacy / legal officers | Before real-data retention policy, P7 import | TBD |
 | D-08 | Data inventory, lawful handling, public fields, redaction policy, publication/release authority and correction channel | Privacy / legal / Secretary | P2 data intake and P9 release | TBD |
 | D-09 | Audit reviewers, review cadence, export destination, integrity/signing keys and export-lag threshold | Auditor / IT / sponsor | P1 evidence operations | TBD |
