@@ -1,0 +1,9 @@
+import { describe, expect, it } from 'vitest';
+import { grantSchema, memberSchema, paginationSchema, termSchema, userStateSchema } from './index.js';
+describe('public input contracts',()=>{
+  it('rejects hidden privilege fields',()=>expect(userStateSchema.safeParse({enabled:true,expectedRevision:1,reason:'Enable test account',role:'SYS'}).success).toBe(false));
+  it('rejects invalid calendar dates and reversed term dates',()=>{expect(termSchema.safeParse({label:'Test',startsOn:'2026-02-30',endsOn:'2026-12-31',reason:'Synthetic test term'}).success).toBe(false);expect(termSchema.safeParse({label:'Test',startsOn:'2027-01-01',endsOn:'2026-01-01',reason:'Synthetic test term'}).success).toBe(false);});
+  it('requires revisions and meaningful reasons for roster writes',()=>expect(memberSchema.safeParse({personId:'10000000-0000-4000-8000-000000000001',role:'CHAIR',startsOn:'2026-01-01',endsOn:'2026-12-31',reason:'ok'}).success).toBe(false));
+  it('bounds lists and rejects unknown filters',()=>{expect(paginationSchema.parse({})).toEqual({page:1,limit:25});expect(paginationSchema.safeParse({limit:10000}).success).toBe(false);expect(paginationSchema.safeParse({rawSQL:'x'}).success).toBe(false);});
+  it('prevents municipality-wide staff grants and committee-scoped system admins',()=>{const b={userId:'10000000-0000-4000-8000-000000000001',scopeId:'20000000-0000-4000-8000-000000000001',validFrom:'2026-01-01T00:00:00Z',validUntil:'2027-01-01T00:00:00Z',reason:'Synthetic scope test'};expect(grantSchema.safeParse({...b,role:'CS',scopeType:'MUNICIPALITY'}).success).toBe(false);expect(grantSchema.safeParse({...b,role:'SYS',scopeType:'COMMITTEE'}).success).toBe(false);expect(grantSchema.safeParse({...b,role:'CS',scopeType:'COMMITTEE'}).success).toBe(true);});
+});

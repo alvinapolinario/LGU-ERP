@@ -1,0 +1,6 @@
+{
+ "name":"@ltas/api","version":"0.1.0","private":true,"type":"module",
+ "scripts":{"build":"tsc","typecheck":"tsc --noEmit","dev":"node --watch --env-file=../../.env dist/main.js","start":"node dist/main.js","test":"vitest run","db:generate":"prisma generate","db:migrate":"prisma migrate deploy","db:seed":"node --env-file=../../.env dist/seed.js","worker":"node --env-file=../../.env dist/worker.js"},
+ "dependencies":{"@ltas/contracts":"0.1.0","@nestjs/common":"12.0.4","@nestjs/core":"12.0.4","@nestjs/platform-express":"12.0.4","@prisma/client":"^7.0.0","@prisma/adapter-mariadb":"^7.0.0","connect-redis":"^9.0.0","express":"^5.1.0","express-session":"^1.18.2","helmet":"^8.1.0","openid-client":"^6.8.0","redis":"^5.0.0","reflect-metadata":"^0.2.2","rxjs":"^7.8.2","zod":"^4.0.0","dotenv":"^17.0.0"},
+ "devDependencies":{"prisma":"^7.0.0","@types/express":"^5.0.0","@types/express-session":"^1.18.2"}
+}

@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client"
+  output = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+datasource db {
+  provider = "mysql"
+}
+model Municipality {
+  id String @id @db.Char(36)
+  code String @unique @db.VarChar(30)
+  name String @db.VarChar(160)
+  province String @db.VarChar(100)
+  timezone String @default("Asia/Manila") @db.VarChar(50)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
+  users User[]
+  terms CouncilTerm[]
+  persons Person[]
+  committees Committee[]
+  auditCursor AuditCursor?
+  @@map("municipalities")
+}
+model User {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  issuer String @db.VarChar(255)
+  subject String @db.VarChar(255)
+  displayName String @db.VarChar(160)
+  enabled Boolean @default(true)
+  policyVersion Int @default(1)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
+  grants UserRole[]
+  @@unique([issuer,subject])
+  @@unique([id,municipalityId])
+  @@index([municipalityId,enabled])
+  @@map("users")
+}
+model UserRole {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  userId String @db.Char(36)
+  user User @relation(fields:[userId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  role String @db.VarChar(20)
+  scopeType String @db.VarChar(20)
+  scopeId String @db.Char(36)
+  validFrom DateTime @db.DateTime(3)
+  validUntil DateTime @db.DateTime(3)
+  approvedBy String @db.Char(36)
+  requestId String? @unique @db.Char(36)
+  revokedAt DateTime? @db.DateTime(3)
+  revision Int @default(1)
+  @@index([userId,validUntil])
+  @@map("user_roles")
+}
+model GrantRequest {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  userId String @db.Char(36)
+  role String @db.VarChar(20)
+  scopeType String @db.VarChar(20)
+  scopeId String @db.Char(36)
+  validFrom DateTime @db.DateTime(3)
+  validUntil DateTime @db.DateTime(3)
+  requestedBy String @db.Char(36)
+  reviewedBy String? @db.Char(36)
+  state String @default("PENDING") @db.VarChar(20)
+  reason String @db.VarChar(500)
+  reviewReason String? @db.VarChar(500)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@index([municipalityId,state])
+  @@map("grant_requests")
+}
+model CouncilTerm {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  label String @db.VarChar(80)
+  startsOn DateTime @db.Date
+  endsOn DateTime @db.Date
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  committees Committee[]
+  @@unique([municipalityId,label])
+  @@unique([id,municipalityId])
+  @@map("council_terms")
+}
+model Person {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  displayName String @db.VarChar(160)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  members CommitteeMember[]
+  @@unique([id,municipalityId])
+  @@index([municipalityId,displayName])
+  @@map("persons")
+}
+model Committee {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  termId String @db.Char(36)
+  term CouncilTerm @relation(fields:[termId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  code String @db.VarChar(30)
+  name String @db.VarChar(160)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  members CommitteeMember[]
+  @@unique([municipalityId,termId,code])
+  @@unique([id,municipalityId])
+  @@map("committees")
+}
+model CommitteeMember {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  committeeId String @db.Char(36)
+  committee Committee @relation(fields:[committeeId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  personId String @db.Char(36)
+  person Person @relation(fields:[personId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  role String @db.VarChar(20)
+  startsOn DateTime @db.Date
+  endsOn DateTime @db.Date
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@unique([committeeId,personId,role,startsOn])
+  @@index([committeeId,endsOn])
+  @@map("committee_members")
+}
+model AuditCursor {
+  municipalityId String @id @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  sequence BigInt @default(0)
+  hash String @db.Char(64)
+  @@map("audit_cursors")
+}
+model AuditLog {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  sequence BigInt
+  actorId String @db.Char(36)
+  actorName String @db.VarChar(160)
+  action String @db.VarChar(80)
+  entityId String @db.Char(36)
+  correlationId String @db.Char(36)
+  payload Json
+  previousHash String @db.Char(64)
+  hash String @db.Char(64)
+  recordedAt DateTime @db.DateTime(3)
+  @@unique([municipalityId,sequence])
+  @@index([municipalityId,recordedAt])
+  @@map("audit_logs")
+}
+model OutboxEvent {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  type String @db.VarChar(80)
+  payload Json
+  state String @default("PENDING") @db.VarChar(20)
+  attempts Int @default(0)
+  availableAt DateTime @default(now()) @db.DateTime(3)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@index([state,availableAt])
+  @@map("outbox_events")
+}
+model ConsumerReceipt {
+  id String @id @db.Char(36)
+  consumer String @db.VarChar(80)
+  eventId String @db.Char(36)
+  completedAt DateTime @default(now()) @db.DateTime(3)
+  @@unique([consumer,eventId])
+  @@map("consumer_receipts")
+}
+model IdempotencyRecord {
+  id String @id @db.Char(36)
+  actorId String @db.Char(36)
+  action String @db.VarChar(80)
+  key String @db.VarChar(100)
+  requestHash String @db.Char(64)
+  result Json
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@unique([actorId,action,key])
+  @@map("idempotency_records")
+}

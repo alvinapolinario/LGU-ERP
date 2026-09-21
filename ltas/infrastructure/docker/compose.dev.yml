@@ -1,0 +1,62 @@
+# Infrastructure only. Run Node apps on the host as documented in docs/28.
+# This file was prepared without invoking Docker on the development computer.
+name: ltas-development
+services:
+  mysql:
+    image: mysql:8.4.11
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Generate .env first}
+      MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD:?Generate .env first}
+      MYSQL_MIGRATION_PASSWORD: ${MYSQL_MIGRATION_PASSWORD:?Generate .env first}
+      MYSQL_WORKER_PASSWORD: ${MYSQL_WORKER_PASSWORD:?Generate .env first}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Generate .env first}
+    ports: ["127.0.0.1:3307:3306"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ../database/init-databases.sh:/docker-entrypoint-initdb.d/01-ltas.sh:ro
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci", "--default-time-zone=+00:00"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -uroot -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+  redis:
+    image: redis:7.4.11-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Generate .env first}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly no --save ''"]
+    ports: ["127.0.0.1:6380:6379"]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    command: ["start-dev", "--http-port=8080"]
+    environment:
+      KC_DB: mysql
+      KC_DB_URL: jdbc:mysql://mysql:3306/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Generate .env first}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?Generate .env first}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Generate .env first}
+      KC_HOSTNAME: http://localhost:8081
+    ports: ["127.0.0.1:8081:8080"]
+    depends_on:
+      mysql: {condition: service_healthy}
+    restart: unless-stopped
+  minio:
+    profiles: ["object-storage"]
+    build: {context: ., dockerfile: Minio.Dockerfile}
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Generate .env first}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Generate .env first}
+    command: ["server", "/data", "--console-address", ":9001"]
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
+    volumes: ["minio-data:/data"]
+volumes:
+  mysql-data:
+  minio-data:
