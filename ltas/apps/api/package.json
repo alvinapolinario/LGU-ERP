@@ -9,7 +9,7 @@
   "dev": "node --watch --env-file=../../.env dist/main.js",
   "start": "node dist/main.js",
   "test": "vitest run",
-  "test:mysql": "vitest run src/mysql.access.test.ts src/mysql.measure.test.ts",
+    "test:mysql": "vitest run src/mysql.access.test.ts src/mysql.measure.test.ts src/mysql.referral.test.ts src/mysql.meeting.test.ts src/mysql.session.test.ts src/mysql.library.test.ts",
   "db:generate": "prisma generate",
   "db:migrate": "prisma migrate deploy",
   "db:seed": "node --env-file=../../.env dist/seed.js",

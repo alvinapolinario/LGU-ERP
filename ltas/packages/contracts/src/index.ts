@@ -4,20 +4,26 @@ export const permissions = [
   'municipality.view', 'settings.manage', 'user.view', 'user.manage', 'role.assign', 'grant.approve',
   'term.view', 'term.manage', 'person.view', 'person.manage',
   'committee.view', 'committee.manage', 'committee.members.manage',
+  'committee.referral.view', 'committee.referral.create', 'committee.referral.close',
+  'committee.meeting.view', 'committee.meeting.manage', 'committee.meeting.close',
+  'session.view', 'session.manage', 'session.close',
+  'attendance.record', 'vote.view', 'vote.record',
   'audit.view', 'system.monitor',
   'measure.view', 'measure.create', 'measure.edit', 'measure.submit', 'measure.file', 'measure.version.create',
   'document.upload', 'document.view', 'document.download',
+  'library.view', 'report.view',
   'task.assign', 'task.manage', 'notification.view',
 ] as const;
 export type Permission = typeof permissions[number];
 export const roles = ['SYS', 'SEC', 'AUD', 'CS', 'LS'] as const;
 export type Role = typeof roles[number];
-const staffMeasure: readonly Permission[] = ['municipality.view', 'term.view', 'person.view', 'committee.view', 'measure.view', 'measure.create', 'measure.edit', 'measure.submit', 'measure.version.create', 'document.upload', 'document.view', 'document.download', 'task.assign', 'task.manage', 'notification.view'];
+const staffMeasure: readonly Permission[] = ['municipality.view', 'term.view', 'person.view', 'committee.view', 'committee.referral.view', 'committee.meeting.view', 'session.view', 'attendance.record', 'vote.view', 'measure.view', 'measure.create', 'measure.edit', 'measure.submit', 'measure.version.create', 'document.upload', 'document.view', 'document.download', 'library.view', 'report.view', 'task.assign', 'task.manage', 'notification.view'];
+const committeeStaff: readonly Permission[] = ['municipality.view', 'term.view', 'committee.view', 'committee.referral.view', 'committee.meeting.view', 'committee.meeting.manage', 'committee.meeting.close', 'measure.view', 'document.upload', 'document.view', 'document.download', 'library.view', 'report.view', 'task.assign', 'task.manage', 'notification.view'];
 export const rolePermissions: Record<Role, readonly Permission[]> = {
   SYS: ['municipality.view', 'settings.manage', 'user.view', 'user.manage', 'role.assign', 'grant.approve', 'term.view', 'person.view', 'system.monitor'],
-  SEC: ['municipality.view', 'settings.manage', 'term.view', 'term.manage', 'person.view', 'person.manage', 'committee.view', 'committee.manage', 'committee.members.manage', 'audit.view', 'measure.view', 'measure.create', 'measure.edit', 'measure.submit', 'measure.file', 'measure.version.create', 'document.upload', 'document.view', 'document.download', 'task.assign', 'task.manage', 'notification.view'],
-  AUD: ['municipality.view', 'term.view', 'person.view', 'committee.view', 'audit.view', 'measure.view', 'document.view'],
-  CS: ['municipality.view', 'term.view', 'committee.view'],
+  SEC: ['municipality.view', 'settings.manage', 'term.view', 'term.manage', 'person.view', 'person.manage', 'committee.view', 'committee.manage', 'committee.members.manage', 'committee.referral.view', 'committee.referral.create', 'committee.referral.close', 'committee.meeting.view', 'committee.meeting.manage', 'committee.meeting.close', 'session.view', 'session.manage', 'session.close', 'attendance.record', 'vote.view', 'vote.record', 'audit.view', 'measure.view', 'measure.create', 'measure.edit', 'measure.submit', 'measure.file', 'measure.version.create', 'document.upload', 'document.view', 'document.download', 'library.view', 'report.view', 'task.assign', 'task.manage', 'notification.view'],
+  AUD: ['municipality.view', 'term.view', 'person.view', 'committee.view', 'committee.referral.view', 'committee.meeting.view', 'session.view', 'vote.view', 'audit.view', 'measure.view', 'document.view', 'library.view', 'report.view'],
+  CS: committeeStaff,
   LS: staffMeasure,
 };
 export const idSchema = z.uuid();
@@ -49,7 +55,7 @@ export const measureCreateSchema = z.object({
 export const measureEditSchema = z.object({ title: text(240), subject: text(500), expectedRevision: revisionSchema, reason: reasonSchema }).strict();
 export const measureVersionSchema = z.object({ synopsis: text(8000), expectedRevision: revisionSchema, reason: reasonSchema }).strict();
 export const documentIntentSchema = z.object({
-  ownerType: z.literal('MEASURE'),
+  ownerType: z.enum(['MEASURE', 'COMMITTEE', 'MEETING', 'SESSION']),
   ownerId: idSchema,
   originalFilename: text(200),
   declaredMime: z.enum(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png', 'image/tiff']),
@@ -57,6 +63,117 @@ export const documentIntentSchema = z.object({
   reason: reasonSchema,
 }).strict();
 export const taskCompleteSchema = z.object({ expectedRevision: revisionSchema, reason: reasonSchema }).strict();
+export const referralRole = z.enum(['LEAD', 'JOINT']);
+export const referralCreateSchema = z.object({
+  leadCommitteeId: idSchema,
+  jointCommitteeIds: z.array(idSchema).max(10).default([]),
+  referredOn: date,
+  dueOn: date.optional(),
+  expectedRevision: revisionSchema,
+  reason: reasonSchema,
+}).strict().refine(v => !v.jointCommitteeIds.includes(v.leadCommitteeId), {message:'The lead committee cannot also be listed as joint', path:['jointCommitteeIds']}).refine(v => new Set(v.jointCommitteeIds).size === v.jointCommitteeIds.length, {message:'Joint committees must be unique', path:['jointCommitteeIds']}).refine(v => !v.dueOn || v.dueOn >= v.referredOn, {message:'Due date must follow the referral date', path:['dueOn']});
+export const referralCloseSchema = z.object({ expectedRevision: revisionSchema, reason: reasonSchema }).strict();
+export const meetingCreateSchema = z.object({
+  title: text(240),
+  venue: text(160),
+  scheduledAt: instant,
+  referralIds: z.array(idSchema).max(20).default([]),
+  reason: reasonSchema,
+}).strict();
+export const meetingEditSchema = z.object({
+  title: text(240),
+  venue: text(160),
+  scheduledAt: instant,
+  expectedRevision: revisionSchema,
+  reason: reasonSchema,
+}).strict();
+export const meetingAgendaSchema = z.object({
+  referralId: idSchema,
+  expectedRevision: revisionSchema,
+  reason: reasonSchema,
+}).strict();
+export const sessionCreateSchema = z.object({
+  termId: idSchema,
+  title: text(240),
+  venue: text(160),
+  kind: z.enum(['REGULAR', 'SPECIAL']),
+  scheduledAt: instant,
+  measureIds: z.array(idSchema).max(30).default([]),
+  reason: reasonSchema,
+}).strict();
+export const sessionEditSchema = z.object({
+  title: text(240),
+  venue: text(160),
+  kind: z.enum(['REGULAR', 'SPECIAL']),
+  scheduledAt: instant,
+  expectedRevision: revisionSchema,
+  reason: reasonSchema,
+}).strict();
+export const sessionAgendaSchema = z.object({
+  measureId: idSchema,
+  expectedRevision: revisionSchema,
+  reason: reasonSchema,
+}).strict();
+export const attendanceSchema = z.object({
+  personId: idSchema,
+  disposition: z.enum(['PRESENT', 'ABSENT', 'EXCUSED']),
+  expectedRevision: revisionSchema,
+  reason: reasonSchema,
+}).strict();
+export const sessionVoteSchema = z.object({
+  measureId: idSchema,
+  yesCount: z.number().int().min(0).max(200),
+  noCount: z.number().int().min(0).max(200),
+  abstainCount: z.number().int().min(0).max(200),
+  expectedRevision: revisionSchema,
+  reason: reasonSchema,
+}).strict();
+export const libraryQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  q: z.string().trim().max(120).optional().default(''),
+  kind: z.enum(['MEASURE', 'DOCUMENT', 'SESSION', 'MEETING', 'COMMITTEE']).optional(),
+}).strict();
+export const REPORT_DEFINITION = 'P-REPORT-INTERIM-1';
+export interface CommitteeMeeting {
+  id:string; committeeId:string; reference:string; title:string; venue:string;
+  scheduledAt:string; state:string; revision:number;
+  agenda?:MeetingAgendaItem[];
+}
+export interface MeetingAgendaItem {
+  id:string; sequence:number; referralId:string; measureVersionId:string;
+  referral?:Referral;
+}
+export interface LegislativeSession {
+  id:string; termId:string; reference:string; title:string; venue:string; kind:string;
+  scheduledAt:string; state:string; revision:number;
+  agenda?:SessionAgendaItem[];
+  attendance?:SessionAttendanceRow[];
+  votes?:SessionVoteRow[];
+}
+export interface SessionAgendaItem {
+  id:string; sequence:number; measureId:string; measureVersionId:string;
+  measure?:{id:string; title:string; typeCode:string; stage:string};
+}
+export interface SessionAttendanceRow {
+  id:string; personId:string; disposition:string; person?:Person;
+}
+export interface SessionVoteRow {
+  id:string; measureId:string; measureVersionId:string; yesCount:number; noCount:number; abstainCount:number; result:string;
+  measure?:{id:string; title:string; typeCode:string; stage:string};
+}
+export interface CalendarEvent {
+  id:string; kind:string; reference:string; title:string; venue:string; scheduledAt:string; state:string; ownerLabel:string;
+}
+export interface LibraryHit {
+  id:string; kind:string; title:string; detail:string; state:string;
+}
+export interface ReportMetric {
+  key:string; label:string; value:number; definition:string;
+}
+export interface ReportSnapshot {
+  definitionVersion:string; asOf:string; timezone:string; warnings:string[]; metrics:ReportMetric[];
+}
 
 export interface SessionView { user: { id: string; displayName: string; municipalityId: string }; permissions: Permission[]; csrfToken: string; }
 export interface Page<T> { items: T[]; pageInfo: {page: number; limit: number; total: number}; }
@@ -76,10 +193,17 @@ export interface Measure {
   officialSeries:string|null; officialYear:number|null; officialNumber:number|null;
   currentVersionId:string|null; revision:number; authors?:MeasureAuthor[]; currentVersion?:MeasureVersion|null;
 }
-export interface MeasureStats {proposed:number;}
+export interface MeasureStats {proposed:number; pendingCommittee:number;}
+export interface Referral {
+  id:string; measureId:string; measureVersionId:string; committeeId:string; groupId:string;
+  referralSequence:number; role:string; sourceKind:string; referredOn:string; dueOn:string|null;
+  disposition:string; revision:number;
+  committee?:{id:string; code:string; name:string};
+  measure?:{id:string; title:string; typeCode:string; stage:string};
+}
 export interface TimelineEvent {id:string; sequence:number; fromStage:string|null; toStage:string; reason:string; actorId:string; recordedAt:string;}
 export interface UploadIntent {id:string; status:string; originalFilename:string; expiresAt:string;}
-export interface DocumentRecord {id:string; title:string; classification:string; currentReadyVersionId:string|null; latestState:string;}
-export interface WorkTask {id:string; ownerType:string; ownerId:string; title:string; state:string; assigneeId:string|null; revision:number;}
+export interface DocumentRecord {id:string; title:string; classification:string; currentReadyVersionId:string|null; latestState:string; ownerType?:string; ownerId?:string;}
+export interface WorkTask {id:string; ownerType:string; ownerId:string; measureId?:string|null; title:string; state:string; assigneeId:string|null; revision:number;}
 export interface NoticeItem {id:string; summary:string; readAt:string|null; createdAt:string;}
 export interface Problem {status:number; code:string; detail:string; correlationId:string; errors?:unknown;}

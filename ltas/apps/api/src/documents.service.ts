@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Inject, Injectable, StreamableFile } from '@nestjs/common';
-import { documentIntentSchema, idSchema, reasonSchema } from '@ltas/contracts';
+import { documentIntentSchema, idSchema, paginationSchema, reasonSchema } from '@ltas/contracts';
 import { CONTEXT, type AppContext } from './context.js';
 import { Commands } from './commands.js';
-import { requirePermission } from './access.js';
+import { assignedCommitteeIds, canMunicipality, measureVisibility, requireCommitteePermission, requirePermission } from './access.js';
+import { can } from './domain/policy.js';
 import { fail, type AuthRequest } from './http.js';
 import { scanBytes, validationStateFor } from './domain/scanner.js';
 import { detectMime } from './domain/mime.js';
@@ -17,18 +18,63 @@ function sanitizeName(name:string):string {
 export class DocumentsService {
   constructor(@Inject(CONTEXT) private readonly ctx:AppContext, @Inject(Commands) private readonly commands:Commands) {}
   private scope(r:AuthRequest) {return {municipalityId:r.principal.municipalityId};}
+  private visibleMeasure(r:AuthRequest) {
+    const where=measureVisibility(r.principal,'measure.view');
+    if(!where) fail(403,'ACCESS_DENIED','You do not have access to this action.');
+    return where;
+  }
+  private documentCommittee(r:AuthRequest,permission:'document.view'|'document.upload'|'document.download') {
+    if(canMunicipality(r.principal,permission)) return undefined;
+    const committeeId=assignedCommitteeIds(r.principal,permission)[0];
+    if(!committeeId) fail(403,'ACCESS_DENIED','You do not have access to this action.');
+    return committeeId;
+  }
+  private async assertOwner(r:AuthRequest,ownerType:string,ownerId:string) {
+    if(ownerType==='MEASURE') {
+      if(!await this.ctx.db.legislativeMeasure.findFirst({where:{id:ownerId,...this.visibleMeasure(r)}})) fail(404,'NOT_FOUND','Measure not found.');
+      return;
+    }
+    if(ownerType==='COMMITTEE') {
+      const committee=await this.ctx.db.committee.findFirst({where:{id:ownerId,...this.scope(r)}});
+      if(!committee || !(canMunicipality(r.principal,'committee.view') || can(r.principal,'committee.view',{...this.scope(r),committeeId:ownerId}))) fail(404,'NOT_FOUND','Committee not found.');
+      return;
+    }
+    if(ownerType==='MEETING') {
+      const meeting=await this.ctx.db.committeeMeeting.findFirst({where:{id:ownerId,...this.scope(r)}});
+      if(!meeting || !(canMunicipality(r.principal,'committee.view') || can(r.principal,'committee.view',{...this.scope(r),committeeId:meeting.committeeId}))) fail(404,'NOT_FOUND','Meeting not found.');
+      requireCommitteePermission(r.principal,'committee.meeting.view',meeting.committeeId);
+      return;
+    }
+    if(ownerType==='SESSION') {
+      if(!canMunicipality(r.principal,'session.view') || !await this.ctx.db.legislativeSession.findFirst({where:{id:ownerId,...this.scope(r)}})) fail(404,'NOT_FOUND','Session not found.');
+      return;
+    }
+    fail(422,'UNSUPPORTED_OWNER','This owner type cannot receive documents in this slice.');
+  }
   async createIntent(r:AuthRequest,body:unknown) {
     const input=documentIntentSchema.parse(body);
+    const committeeId=this.documentCommittee(r,'document.upload');
     return {data:await this.commands.execute(r,'document.upload','document.intent-created',input,async tx=>{
-      if(input.ownerType==='MEASURE' && !await tx.legislativeMeasure.findFirst({where:{id:input.ownerId,...this.scope(r)}})) fail(404,'NOT_FOUND','Measure not found.');
+      if(input.ownerType==='MEASURE' && !await tx.legislativeMeasure.findFirst({where:{id:input.ownerId,...this.visibleMeasure(r)}})) fail(404,'NOT_FOUND','Measure not found.');
+      if(input.ownerType==='COMMITTEE') {
+        const committee=await tx.committee.findFirst({where:{id:input.ownerId,...this.scope(r)}});
+        if(!committee || !(canMunicipality(r.principal,'committee.view') || can(r.principal,'committee.view',{...this.scope(r),committeeId:input.ownerId}))) fail(404,'NOT_FOUND','Committee not found.');
+      }
+      if(input.ownerType==='MEETING') {
+        const meeting=await tx.committeeMeeting.findFirst({where:{id:input.ownerId,...this.scope(r)}});
+        if(!meeting || !(canMunicipality(r.principal,'committee.view') || can(r.principal,'committee.view',{...this.scope(r),committeeId:meeting.committeeId}))) fail(404,'NOT_FOUND','Meeting not found.');
+      }
+      if(input.ownerType==='SESSION') {
+        if(!canMunicipality(r.principal,'session.view') || !await tx.legislativeSession.findFirst({where:{id:input.ownerId,...this.scope(r)}})) fail(404,'NOT_FOUND','Session not found.');
+      }
       const id=randomUUID();
       const quarantineKey=`municipalities/${r.principal.municipalityId}/documents/${id}/versions/${randomUUID()}/object`;
       const result=await tx.uploadSession.create({data:{id,municipalityId:r.principal.municipalityId,uploaderId:r.principal.id,ownerType:input.ownerType,ownerId:input.ownerId,originalFilename:sanitizeName(input.originalFilename),declaredMime:input.declaredMime,expectedBytes:input.expectedBytes,quarantineKey,status:'OPEN',expiresAt:new Date(Date.now()+60*60*1000)}});
       return {entityId:id,result,changes:{ownerId:input.ownerId,filename:result.originalFilename,reason:input.reason}};
-    })};
+    },committeeId)};
   }
   async storeContent(r:AuthRequest,rawId:string,body:Buffer) {
-    requirePermission(r.principal,'document.upload',this.scope(r));
+    requirePermission(r.principal,'document.upload',{...this.scope(r),committeeId:this.documentCommittee(r,'document.upload')});
     const id=idSchema.parse(rawId);
     if(body.length===0 || body.length>maxBytes) fail(422,'FILE_TOO_LARGE','Each file must be between 1 byte and 25 MiB (proposed cap).');
     const session=await this.ctx.db.uploadSession.findFirst({where:{id,...this.scope(r),uploaderId:r.principal.id}});
@@ -56,21 +102,25 @@ export class DocumentsService {
       });
       await tx.uploadSession.update({where:{id},data:{status:'FINALIZED'}});
       return {entityId:documentId,result:{id:documentId,title:session.originalFilename,classification:'INTERNAL',currentReadyVersionId:null,latestState:version.validationState,scanVerdict:version.scanVerdict},changes:{documentId,scanVerdict:verdict,reason}};
-    })};
+    },this.documentCommittee(r,'document.upload'))};
   }
   async get(r:AuthRequest,rawId:string) {
-    requirePermission(r.principal,'document.view',this.scope(r));
+    requirePermission(r.principal,'document.view',{...this.scope(r),committeeId:this.documentCommittee(r,'document.view')});
     const id=idSchema.parse(rawId);
     const row=await this.ctx.db.document.findFirst({where:{id,...this.scope(r)},include:{versions:{orderBy:{sequence:'desc'},take:1}}});
     if(!row) fail(404,'NOT_FOUND','Document not found.');
+    if(row.measureId && !await this.ctx.db.legislativeMeasure.findFirst({where:{id:row.measureId,...this.visibleMeasure(r)}})) fail(404,'NOT_FOUND','Document not found.');
+    if(row.ownerType!=='MEASURE') await this.assertOwner(r,row.ownerType,row.ownerId);
     const latest=row.versions[0];
     return {data:{id:row.id,title:row.title,classification:row.classification,currentReadyVersionId:row.currentReadyVersionId,latestState:latest?.validationState??'UNKNOWN',scanVerdict:latest?.scanVerdict??null}};
   }
   async download(r:AuthRequest,rawId:string) {
-    requirePermission(r.principal,'document.download',this.scope(r));
+    requirePermission(r.principal,'document.download',{...this.scope(r),committeeId:this.documentCommittee(r,'document.download')});
     const id=idSchema.parse(rawId);
     const row=await this.ctx.db.document.findFirst({where:{id,...this.scope(r)},include:{versions:true}});
     if(!row) fail(404,'NOT_FOUND','Document not found.');
+    if(row.measureId && !await this.ctx.db.legislativeMeasure.findFirst({where:{id:row.measureId,...this.visibleMeasure(r)}})) fail(404,'NOT_FOUND','Document not found.');
+    if(row.ownerType!=='MEASURE') await this.assertOwner(r,row.ownerType,row.ownerId);
     const ready=row.versions.find(v=>v.validationState==='READY');
     if(!ready) fail(422,'DOCUMENT_NOT_READY','Quarantined files cannot be downloaded until an approved scanner marks them ready (D-13).');
     const bytes=await this.ctx.store.get(ready.bucket,ready.objectKey);
@@ -80,8 +130,30 @@ export class DocumentsService {
     fail(422,'CERTIFIER_NOT_CONFIGURED','Certification requires designated officers (D-03 Q7) and is not available in this slice.');
   }
   async forMeasure(r:AuthRequest,measureId:string) {
-    requirePermission(r.principal,'document.view',this.scope(r));
+    requirePermission(r.principal,'document.view',{...this.scope(r),committeeId:this.documentCommittee(r,'document.view')});
+    if(!await this.ctx.db.legislativeMeasure.findFirst({where:{id:measureId,...this.visibleMeasure(r)}})) fail(404,'NOT_FOUND','Measure not found.');
     const items=await this.ctx.db.document.findMany({where:{measureId,municipalityId:r.principal.municipalityId},include:{versions:{orderBy:{sequence:'desc'},take:1}}});
     return {items:items.map(row=>({id:row.id,title:row.title,classification:row.classification,currentReadyVersionId:row.currentReadyVersionId,latestState:row.versions[0]?.validationState??'UNKNOWN'}))};
+  }
+  async forOwner(r:AuthRequest,ownerType:'COMMITTEE'|'MEETING'|'SESSION',ownerId:string) {
+    requirePermission(r.principal,'document.view',{...this.scope(r),committeeId:this.documentCommittee(r,'document.view')});
+    await this.assertOwner(r,ownerType,ownerId);
+    const items=await this.ctx.db.document.findMany({where:{ownerType,ownerId,municipalityId:r.principal.municipalityId},include:{versions:{orderBy:{sequence:'desc'},take:1}}});
+    return {items:items.map(row=>({id:row.id,title:row.title,classification:row.classification,currentReadyVersionId:row.currentReadyVersionId,latestState:row.versions[0]?.validationState??'UNKNOWN'}))};
+  }
+  async visible(r:AuthRequest) {
+    requirePermission(r.principal,'document.view',{...this.scope(r),committeeId:this.documentCommittee(r,'document.view')});
+    const rows=await this.ctx.db.document.findMany({where:this.scope(r),include:{versions:{orderBy:{sequence:'desc'},take:1}},orderBy:{createdAt:'desc'}});
+    const visible=[];
+    for(const row of rows) {
+      try {if(row.ownerType==='MEASURE') {if(!await this.ctx.db.legislativeMeasure.findFirst({where:{id:row.ownerId,...this.visibleMeasure(r)}})) continue;} else await this.assertOwner(r,row.ownerType,row.ownerId); visible.push(row);} catch {continue;}
+    }
+    return visible;
+  }
+  async list(r:AuthRequest,q:unknown) {
+    const {page,limit}=paginationSchema.parse(q);
+    const visible=await this.visible(r);
+    const items=visible.slice((page-1)*limit,page*limit).map(row=>({id:row.id,title:row.title,classification:row.classification,currentReadyVersionId:row.currentReadyVersionId,latestState:row.versions[0]?.validationState??'UNKNOWN',ownerType:row.ownerType,ownerId:row.ownerId}));
+    return {items,pageInfo:{page,limit,total:visible.length}};
   }
 }

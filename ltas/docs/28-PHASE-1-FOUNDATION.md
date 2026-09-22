@@ -45,12 +45,12 @@ Use fictional data only. Do not point this procedure at a real municipality.
 3. `npm install`
 4. `npm run db:generate && npm run db:migrate && npm run build`
 5. `npm run db:seed` (empty database only; `ALLOW_SYNTHETIC_SEED=yes`)
-6. `node --env-file=.env scripts/provision-keycloak.mjs` — writes `.local/development-accounts.json` (mode 0600). Keep it off git.
+6. `node --env-file=.env scripts/provision-keycloak.mjs` — writes `.local/development-accounts.json` (mode 0600). Keep it off git. The development realm uses the `ltas` Keycloak login theme mounted from `infrastructure/keycloak/themes/ltas`. That theme is visual only; identity still goes through Authorization Code + PKCE with no guest bypass.
 7. `npm run worker` in one terminal; `npm run dev:api` in another; `npm run dev:web` in a third.
-8. Open `http://localhost:5173`, sign in with a generated account, and confirm each seeded role.
+8. Open `http://localhost:5173`, sign in with a generated account, and confirm each seeded role. Another machine on the same private LAN can use `http://<this-host-lan-ip>:5173`. Vite listens on all interfaces; Keycloak `8081` is published for that login hop. MySQL and Redis stay on loopback. Re-run provisioning after a network change so LAN redirect URIs stay current.
 9. `npm run check` for generate/typecheck/test/build. Unit tests do not require Docker. `npm run test:mysql` runs T-FR-ACCESS-001/002 and T-FR-MEASURE-001 against the live 8.4 instance. `LTAS_RESTORE_CONFIRM=ltas-restore-rehearsal npm run recovery -- rehearse` is the isolated restore rehearsal (T-NFR-RECOVERY-001); procedure in [backup README](../infrastructure/backup/README.md).
 
-Node apps bind to `127.0.0.1`. Compose publishes MySQL `3307`, Redis `6380`, Keycloak `8081` on loopback only. MinIO is the `object-storage` profile for Phase 2 quarantine uploads.
+The API stays on `127.0.0.1:3000` and is reached through the Vite `/api` proxy. Compose publishes MySQL `3307` and Redis `6380` on loopback only. Keycloak `8081` is reachable on the LAN in this development compose so a remote browser can complete sign-in. MinIO is the `object-storage` profile for Phase 2 quarantine uploads.
 
 ## Remaining Phase 1 gates
 
@@ -66,7 +66,7 @@ These are still required before calling Phase 1 accepted:
 | D-12 supported versions/licensing | Technical lead / procurement | Images pinned in Compose; this workstation ran checks on Node 26 while `engines` requires Node 24. Formal support review TBD |
 | D-16 session timeout, MFA, secret custodians | IT / privacy | 30-minute idle cookie and 8-hour max session; MFA TBD |
 
-Do not treat this Phase 1 handoff as a ban on later phases. Phase 2 engineering is recorded in [30](30-PHASE-2-MEASURES.md). D-03/D-16 signatures remain open; they are not a claim that official numbering, IRP, or MFA were approved.
+Do not treat this Phase 1 handoff as a ban on later phases. Phase 2 engineering is recorded in [30](30-PHASE-2-MEASURES.md). Phase 3 referrals are recorded in [31](31-PHASE-3-REFERRALS.md). Phase 3 meetings and documents are recorded in [32](32-PHASE-3-MEETINGS.md). Phase 4 sessions are recorded in [33](33-PHASE-4-SESSIONS.md). D-03/D-16 signatures remain open; they are not a claim that official numbering, IRP, or MFA were approved.
 
 ## Explicit non-goals for this phase
 

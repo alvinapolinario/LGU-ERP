@@ -15,6 +15,23 @@ export async function loadPrincipal(db:AppContext['db']|Prisma.TransactionClient
 export function requirePermission(principal:Principal,permission:Permission,scope:Scope):void {
   if(!can(principal,permission,scope)) fail(403,'ACCESS_DENIED','You do not have access to this action.');
 }
+export function assignedCommitteeIds(principal:Principal,permission:Permission,now=new Date()):string[] {
+  return [...new Set(principal.grants.filter(g=>g.scopeType==='COMMITTEE' && can(principal,permission,{municipalityId:principal.municipalityId,committeeId:g.scopeId},now)).map(g=>g.scopeId))];
+}
+export function canMunicipality(principal:Principal,permission:Permission):boolean {
+  return can(principal,permission,{municipalityId:principal.municipalityId});
+}
+export function requireCommitteePermission(principal:Principal,permission:Permission,committeeId:string):void {
+  if(canMunicipality(principal,permission)) return;
+  requirePermission(principal,permission,{municipalityId:principal.municipalityId,committeeId});
+}
+export function measureVisibility(principal:Principal,permission:Permission='measure.view'):{municipalityId:string;referrals?:{some:{committeeId:{in:string[]}}}} | null {
+  const municipalityId=principal.municipalityId;
+  if(canMunicipality(principal,permission)) return {municipalityId};
+  const committeeIds=assignedCommitteeIds(principal,permission);
+  if(!committeeIds.length) return null;
+  return {municipalityId,referrals:{some:{committeeId:{in:committeeIds}}}};
+}
 export function csrfMatches(expected:string|undefined,actual:string|undefined):boolean {
   if(!expected || !actual) return false;
   const a=Buffer.from(expected),b=Buffer.from(actual);

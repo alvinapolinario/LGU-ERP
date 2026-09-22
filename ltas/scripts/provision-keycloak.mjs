@@ -1,4 +1,5 @@
 import {randomBytes} from 'node:crypto';
+import {networkInterfaces} from 'node:os';
 import {mkdir,writeFile,access,readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {setDefaultResultOrder} from 'node:dns';
@@ -17,6 +18,34 @@ const identities=[['40000000-0000-4000-8000-000000000001','alex.admin','Alex','R
 const users=identities.map(([id,username,firstName,lastName])=>({id,username,firstName,lastName,email:`${username}@example.invalid`,emailVerified:true,enabled:true,credentials:[{type:'password',value:randomBytes(20).toString('base64url'),temporary:false}],requiredActions:[]}));
 const output=new URL('../.local/development-accounts.json',import.meta.url);
 await mkdir(new URL('../.local/',import.meta.url),{recursive:true});
+function appOrigins(){
+  const url=new URL(env.APP_ORIGIN);
+  const port=url.port?`:${url.port}`:'';
+  const origins=new Set([url.origin]);
+  if(url.hostname==='localhost') origins.add(`http://127.0.0.1${port}`);
+  if(url.hostname==='127.0.0.1') origins.add(`http://localhost${port}`);
+  for(const list of Object.values(networkInterfaces())){
+    for(const item of list??[]){
+      if(item.internal || (item.family!=='IPv4' && item.family!==4)) continue;
+      const [first,second]=item.address.split('.').map(Number);
+      if(first===10 || (first===172 && second>=16 && second<=31) || (first===192 && second===168)) origins.add(`http://${item.address}${port}`);
+    }
+  }
+  return [...origins];
+}
+async function applyClientOrigins(){
+  const origins=appOrigins();
+  const search=await fetch(`${base}/admin/realms/ltas-development/clients?clientId=${encodeURIComponent(env.OIDC_CLIENT_ID)}`, {headers,signal:AbortSignal.timeout(15000)});
+  if(!search.ok) throw new Error(`Could not list the development client (${search.status}).`);
+  const found=await search.json();
+  const client=Array.isArray(found)?found.find(item=>item.clientId===env.OIDC_CLIENT_ID):undefined;
+  if(!client) throw new Error('The development client is missing.');
+  const redirectUris=[...new Set([...(client.redirectUris??[]),...origins.map(origin=>`${origin}/api/v1/auth/callback`)])];
+  const webOrigins=[...new Set([...(client.webOrigins??[]),...origins])];
+  const logout=[...new Set([...(client.attributes?.['post.logout.redirect.uris']??'').split('##').filter(Boolean),...origins])].join('##');
+  const update=await fetch(`${base}/admin/realms/ltas-development/clients/${client.id}`,{method:'PUT',headers,body:JSON.stringify({...client,redirectUris,webOrigins,attributes:{...client.attributes,'post.logout.redirect.uris':logout}}),signal:AbortSignal.timeout(15000)});
+  if(!update.ok) throw new Error(`Could not publish LAN redirect origins (${update.status}).`);
+}
 async function appendAccounts(created){
   let current=[];
   try {current=JSON.parse(await readFile(output,'utf8'));} catch (error) {if(error.code!=='ENOENT') throw error;}
@@ -35,18 +64,20 @@ if(existing.status!==404){
     created.push({username:user.username,password:user.credentials[0].value,subject:user.id});
   }
   if(created.length) await appendAccounts(created);
+  const current=await fetch(`${base}/admin/realms/ltas-development`,{headers,signal:AbortSignal.timeout(15000)});
+  if(!current.ok) throw new Error(`Could not read the development realm (${current.status}).`);
+  const representation=await current.json();
+  if(representation.loginTheme!=='ltas'){
+    const themed=await fetch(`${base}/admin/realms/ltas-development`,{method:'PUT',headers,body:JSON.stringify({...representation,loginTheme:'ltas'}),signal:AbortSignal.timeout(15000)});
+    if(!themed.ok) throw new Error(`Could not apply the LTAS login theme (${themed.status}).`);
+  }
+  await applyClientOrigins();
   console.log(created.length?`Added ${created.length} missing fictional identit${created.length===1?'y':'ies'} privately.`:'Realm already has the documented fictional identities.');
 } else {
   try {await access(output);throw new Error('Account file already exists; refusing to overwrite it.');}catch(e){if(e.code!=='ENOENT')throw e;}
   await writeFile(output,JSON.stringify(users.map(u=>({username:u.username,password:u.credentials[0].value,subject:u.id})),null,2),{flag:'wx',mode:0o600});
-  const origins=(()=>{
-    const primary=env.APP_ORIGIN;
-    const url=new URL(primary);
-    const port=url.port?`:${url.port}`:'';
-    const pair=url.hostname==='localhost'?`http://127.0.0.1${port}`:url.hostname==='127.0.0.1'?`http://localhost${port}`:null;
-    return pair?[primary,pair]:[primary];
-  })();
-  const realm={realm:'ltas-development',displayName:'LTAS · Fictional Municipality',enabled:true,registrationAllowed:false,resetPasswordAllowed:false,bruteForceProtected:true,sslRequired:'external',accessTokenLifespan:1800,ssoSessionIdleTimeout:1800,ssoSessionMaxLifespan:28800,clients:[{clientId:env.OIDC_CLIENT_ID,enabled:true,protocol:'openid-connect',publicClient:false,secret:env.OIDC_CLIENT_SECRET,standardFlowEnabled:true,directAccessGrantsEnabled:false,redirectUris:origins.map(origin=>`${origin}/api/v1/auth/callback`),webOrigins:origins,attributes:{'pkce.code.challenge.method':'S256','post.logout.redirect.uris':origins.join('##')}}],users};
+  const origins=appOrigins();
+  const realm={realm:'ltas-development',displayName:'LTAS · Fictional Municipality',loginTheme:'ltas',enabled:true,registrationAllowed:false,resetPasswordAllowed:false,bruteForceProtected:true,sslRequired:'external',accessTokenLifespan:1800,ssoSessionIdleTimeout:1800,ssoSessionMaxLifespan:28800,clients:[{clientId:env.OIDC_CLIENT_ID,enabled:true,protocol:'openid-connect',publicClient:false,secret:env.OIDC_CLIENT_SECRET,standardFlowEnabled:true,directAccessGrantsEnabled:false,redirectUris:origins.map(origin=>`${origin}/api/v1/auth/callback`),webOrigins:origins,attributes:{'pkce.code.challenge.method':'S256','post.logout.redirect.uris':origins.join('##')}}],users};
   const response=await fetch(`${base}/admin/realms`,{method:'POST',headers,body:JSON.stringify(realm),signal:AbortSignal.timeout(30000)});
   if(!response.ok)throw new Error(`Realm import failed (${response.status}); inspect the local account file and server before retrying.`);
   console.log(`Fictional identities created. Credentials saved privately to ${fileURLToPath(output)}.`);

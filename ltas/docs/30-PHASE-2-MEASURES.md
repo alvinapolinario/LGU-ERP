@@ -15,7 +15,7 @@ This handoff implements a constrained Phase 2 slice from [19](19-DEVELOPMENT-ROA
 | LTAS-FR-DOCUMENT-001/002 | Upload to MinIO quarantine; SHA-256; proposed 25 MiB cap; scanner adapter returns UNKNOWN so state stays QUARANTINED; download only READY (unreachable until D-13) | `apps/api/src/documents.service.ts`, `apps/api/src/domain/scanner.ts` |
 | LTAS-FR-TASK-001 / NOTIFY-001 | In-app task on submit; completing it does not file. No email (D-05) | `apps/api/src/measures.service.ts` |
 | LTAS-FR-DASHBOARD-001 | Proposed Measures = live DRAFT+SUBMITTED count. Other pipeline KPIs stay 0 / later phase | `apps/web/src/App.tsx` |
-| LTAS-FR-ACCESS-002 | **LS** live (Q8). SYS has no measure rights. CS has no measure list until referrals (P3). `measure.file` / `document.certify` stay closed without PO confirmation (Q7) | `packages/contracts`, `apps/api/src/domain/policy.test.ts` |
+| LTAS-FR-ACCESS-002 | **LS** live (Q8). SYS has no measure rights. CS measure list is referral-scoped in [31](31-PHASE-3-REFERRALS.md). `measure.file` / `document.certify` stay closed without PO confirmation (Q7) | `packages/contracts`, `apps/api/src/domain/policy.test.ts` |
 
 ## Implemented HTTP surface (added)
 
@@ -29,7 +29,7 @@ This handoff implements a constrained Phase 2 slice from [19](19-DEVELOPMENT-ROA
 
 ## Explicit non-goals
 
-No readings, sessions, referrals, voting, mayoral action, public portal, official number series, extra measure subtypes, malware scanner, email, or MFA. No fictional ordinances in seed. Completing a task is not a legal filing. A software grant is not authority to sign.
+No readings, sessions, voting, mayoral action, public portal, official number series, extra measure subtypes, malware scanner, email, or MFA. Referrals are the [Phase 3 slice](31-PHASE-3-REFERRALS.md). No fictional ordinances in seed. Completing a task is not a legal filing. A software grant is not authority to sign.
 
 ## Local run additions
 

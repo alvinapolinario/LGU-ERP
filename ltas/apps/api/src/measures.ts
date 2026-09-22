@@ -42,6 +42,8 @@ export class MeasuresController {
 @Controller() @UseGuards(SessionGuard)
 export class DocumentsController {
   constructor(@Inject(DocumentsService) private readonly documents:DocumentsService) {}
+  @Get('documents')
+  list(@Req() r:AuthRequest,@Query() q:unknown) {return this.documents.list(r,q);}
   @Post('documents/intents')
   intent(@Req() r:AuthRequest,@Body() body:unknown) {return this.documents.createIntent(r,body);}
   @Put('documents/intents/:id/content')

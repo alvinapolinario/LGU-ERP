@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { idSchema, measureCreateSchema, measureEditSchema, measureVersionSchema, paginationSchema, reviewSchema, taskCompleteSchema } from '@ltas/contracts';
 import { CONTEXT, type AppContext } from './context.js';
 import { Commands } from './commands.js';
-import { requirePermission } from './access.js';
+import { assignedCommitteeIds, canMunicipality, measureVisibility, requirePermission } from './access.js';
 import { fail, type AuthRequest } from './http.js';
 import { INTERIM_NOTE, INTERIM_PROFILE, interimEdges, resolveTransition } from './domain/workflow.js';
 import { takeOfficialNumber } from './domain/numbering.js';
@@ -15,6 +15,11 @@ const include={authors:{orderBy:{ordering:'asc'}},versions:{orderBy:{sequence:'d
 export class MeasuresService {
   constructor(@Inject(CONTEXT) private readonly ctx:AppContext, @Inject(Commands) private readonly commands:Commands) {}
   private scope(r:AuthRequest) {return {municipalityId:r.principal.municipalityId};}
+  private visibleMeasures(r:AuthRequest,permission:'measure.view'='measure.view') {
+    const where=measureVisibility(r.principal,permission);
+    if(!where) fail(403,'ACCESS_DENIED','You do not have access to this action.');
+    return where;
+  }
   async ensureCatalog(tx:Prisma.TransactionClient,municipalityId:string) {
     for(const [code,label] of [['ORDINANCE','Ordinance'],['RESOLUTION','Resolution']] as const) {
       if(!await tx.measureType.findUnique({where:{municipalityId_code:{municipalityId,code}}})) await tx.measureType.create({data:{id:randomUUID(),municipalityId,code,label}});
@@ -32,28 +37,28 @@ export class MeasuresService {
     return {...row,currentVersionId:current?.id??null,currentVersion:current,versions:undefined};
   }
   async stats(r:AuthRequest) {
-    requirePermission(r.principal,'measure.view',this.scope(r));
-    const proposed=await this.ctx.db.legislativeMeasure.count({where:{...this.scope(r),stage:{in:['DRAFT','SUBMITTED']}}});
-    return {data:{proposed}};
+    const where=this.visibleMeasures(r);
+    const [proposed,pending]=await this.ctx.db.$transaction([
+      this.ctx.db.legislativeMeasure.count({where:{...where,stage:{in:['DRAFT','SUBMITTED']}}}),
+      this.ctx.db.legislativeMeasure.count({where:{...where,referrals:{some:{disposition:'OPEN'}}}}),
+    ]);
+    return {data:{proposed,pendingCommittee:pending}};
   }
   async list(r:AuthRequest,q:unknown) {
-    requirePermission(r.principal,'measure.view',this.scope(r));
-    const {page,limit}=paginationSchema.parse(q),where=this.scope(r);
+    const {page,limit}=paginationSchema.parse(q),where=this.visibleMeasures(r);
     const [items,total]=await this.ctx.db.$transaction([this.ctx.db.legislativeMeasure.findMany({where,include,skip:(page-1)*limit,take:limit,orderBy:[{createdAt:'desc'},{id:'desc'}]}),this.ctx.db.legislativeMeasure.count({where})]);
     return {items:items.map(item=>this.view(item)),pageInfo:{page,limit,total}};
   }
   async get(r:AuthRequest,rawId:string) {
-    requirePermission(r.principal,'measure.view',this.scope(r));
     const id=idSchema.parse(rawId);
-    const row=await this.ctx.db.legislativeMeasure.findFirst({where:{id,...this.scope(r)},include:{authors:{orderBy:{ordering:'asc'}},versions:{orderBy:{sequence:'asc'}}}});
+    const row=await this.ctx.db.legislativeMeasure.findFirst({where:{id,...this.visibleMeasures(r)},include:{authors:{orderBy:{ordering:'asc'}},versions:{orderBy:{sequence:'asc'}}}});
     if(!row) fail(404,'NOT_FOUND','Measure not found.');
     const current=row.versions.at(-1)??null;
     return {data:{...row,currentVersionId:current?.id??null,currentVersion:current}};
   }
   async timeline(r:AuthRequest,rawId:string) {
-    requirePermission(r.principal,'measure.view',this.scope(r));
     const id=idSchema.parse(rawId);
-    if(!await this.ctx.db.legislativeMeasure.findFirst({where:{id,...this.scope(r)}})) fail(404,'NOT_FOUND','Measure not found.');
+    if(!await this.ctx.db.legislativeMeasure.findFirst({where:{id,...this.visibleMeasures(r)}})) fail(404,'NOT_FOUND','Measure not found.');
     const items=await this.ctx.db.measureStatusHistory.findMany({where:{measureId:id},orderBy:{sequence:'asc'}});
     return {items};
   }
@@ -113,6 +118,10 @@ export class MeasuresService {
       const old=await tx.legislativeMeasure.findFirst({where:{id,...this.scope(r)},include:{versions:{orderBy:{sequence:'desc'},take:1},history:true,workflow:true}});
       if(!old) fail(404,'NOT_FOUND','Measure not found.');
       if(old.revision!==input.expectedRevision) fail(409,'STALE_REVISION','Reload this measure before this action.');
+      if(code==='withdraw') {
+        const open=await tx.committeeReferral.findFirst({where:{measureId:id,disposition:'OPEN'},select:{id:true}});
+        if(open) fail(422,'REFERRAL_OPEN','Close every open referral before withdrawing this case file.');
+      }
       const live=resolveTransition(old.stage,code);
       const current=old.versions[0];
       if(code==='submit' && current && !current.frozenAt) await tx.measureVersion.update({where:{id:current.id},data:{frozenAt:new Date()}});
@@ -146,24 +155,42 @@ export class MeasuresService {
     })};
   }
   async tasks(r:AuthRequest,q:unknown) {
-    requirePermission(r.principal,'task.manage',this.scope(r));
     const {page,limit}=paginationSchema.parse(q);
-    const where={municipalityId:r.principal.municipalityId};
+    const where=this.taskWhere(r);
     const [items,total]=await this.ctx.db.$transaction([this.ctx.db.workTask.findMany({where,skip:(page-1)*limit,take:limit,orderBy:{createdAt:'desc'}}),this.ctx.db.workTask.count({where})]);
     return {items,pageInfo:{page,limit,total}};
   }
   async completeTask(r:AuthRequest,rawId:string,body:unknown) {
     const id=idSchema.parse(rawId),input=taskCompleteSchema.parse(body);
+    const preview=await this.ctx.db.workTask.findFirst({where:{id,...this.scope(r)}});
+    if(!preview) fail(404,'NOT_FOUND','Task not found.');
+    const committeeId=canMunicipality(r.principal,'task.manage')?undefined:await this.taskCommittee(r,preview.measureId,preview.assigneeId);
     return {data:await this.commands.execute(r,'task.manage','task.completed',{id,...input},async tx=>{
       const old=await tx.workTask.findFirst({where:{id,...this.scope(r)}});
       if(!old) fail(404,'NOT_FOUND','Task not found.');
       if(old.revision!==input.expectedRevision || old.state!=='OPEN') fail(409,'STALE_REVISION','This task has already changed.');
       const result=await tx.workTask.update({where:{id},data:{state:'COMPLETED',completionNote:input.reason,revision:{increment:1}}});
       return {entityId:id,result,changes:{ownerId:old.ownerId,reason:input.reason,note:'Completing a task does not file the measure.'}};
-    })};
+    },committeeId)};
+  }
+  private taskWhere(r:AuthRequest) {
+    if(canMunicipality(r.principal,'task.manage')) return {municipalityId:r.principal.municipalityId};
+    const committeeIds=assignedCommitteeIds(r.principal,'task.manage');
+    if(!committeeIds.length) fail(403,'ACCESS_DENIED','You do not have access to this action.');
+    return {municipalityId:r.principal.municipalityId,OR:[{assigneeId:r.principal.id},{measure:{referrals:{some:{committeeId:{in:committeeIds}}}}}]};
+  }
+  private async taskCommittee(r:AuthRequest,measureId:string|null,assigneeId:string|null) {
+    const committeeIds=assignedCommitteeIds(r.principal,'task.manage');
+    if(!committeeIds.length) fail(403,'ACCESS_DENIED','You do not have access to this action.');
+    if(measureId) {
+      const link=await this.ctx.db.committeeReferral.findFirst({where:{measureId,committeeId:{in:committeeIds}}});
+      if(link) return link.committeeId;
+    }
+    if(assigneeId===r.principal.id) return committeeIds[0];
+    fail(404,'NOT_FOUND','Task not found.');
   }
   async notifications(r:AuthRequest) {
-    requirePermission(r.principal,'notification.view',this.scope(r));
+    requirePermission(r.principal,'notification.view',{...this.scope(r),committeeId:canMunicipality(r.principal,'notification.view')?undefined:assignedCommitteeIds(r.principal,'notification.view')[0]});
     const items=await this.ctx.db.inAppNotification.findMany({where:{userId:r.principal.id},orderBy:{createdAt:'desc'},take:50});
     return {items};
   }

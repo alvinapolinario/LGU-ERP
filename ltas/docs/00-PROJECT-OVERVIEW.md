@@ -2,13 +2,13 @@
 
 LTAS is the current project within a possible larger municipal digital-government ecosystem. It supports a Sangguniang Bayan's legislative work from drafting to historical research. The authoritative record is a set of attributable events and immutable document versions, not a mutable status beside an uploaded PDF.
 
-**PHASE 1–2 IMPLEMENTATION.** Platform foundation and constrained draft measures are authorized ([30](30-PHASE-2-MEASURES.md)). Official numbering, IRP, and production use are not. This is not production.
+**PHASE 1–4 IMPLEMENTATION plus constrained library/reports.** Platform foundation, constrained draft measures, secretariat-recorded referrals/meetings, secretariat-recorded sessions/roll-call/document list, and a permission-filtered e-Library/report catalog are authorized ([30](30-PHASE-2-MEASURES.md), [31](31-PHASE-3-REFERRALS.md), [32](32-PHASE-3-MEETINGS.md), [33](33-PHASE-4-SESSIONS.md), [34](34-PHASE-7-LIBRARY-REPORTS.md)). Official numbering, IRP, certified votes, official archive, official metrics, and production use are not. This is not production.
 
 ## Scope and outcomes
 
 In scope: the 30 lifecycle capabilities in the supplied brief, administered through sixteen core business areas plus identity, documents, and publication controls. Both ordinances and resolutions are supported, but they need not follow identical procedures. Other measure types require approved rule profiles. Historical records may be imported with provenance and explicitly unknown dates.
 
-Out of scope now: Phases 3–10 modules, production deployment, external municipal systems, automated legal determination, AI/ML and mandatory OpenSearch. Digital signature infrastructure, remote official voting, citizen accounts and automated consolidated codes are future decisions, not implied MVP commitments. Local Compose may include MinIO for synthetic quarantine uploads.
+Out of scope now: remaining Phase 3 hearings/reports and Phases 4–10 modules, production deployment, external municipal systems, automated legal determination, AI/ML and mandatory OpenSearch. Digital signature infrastructure, remote official voting, citizen accounts and automated consolidated codes are future decisions, not implied MVP commitments. Local Compose may include MinIO for synthetic quarantine uploads.
 
 Expected outcomes are findable case files, traceable decisions, fewer untracked deadlines, reproducible official records, and reviewed public access. Baseline volumes and success targets are TBD; do not promise quantified savings without measurements.
 

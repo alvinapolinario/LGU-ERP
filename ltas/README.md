@@ -1,9 +1,9 @@
 # Legislative Tracking and Analysis System (LTAS)
 
-**Status: PHASE 1–2 IMPLEMENTATION** — platform foundation and constrained draft measures.  
-Official numbering, IRP, malware scanning, MFA, readings, referrals, voting, and the public portal are not in this slice.
+**Status: PHASE 1–4 IMPLEMENTATION** — platform foundation through constrained sessions, calendar, secretary-entered roll-call, and document list.  
+Official numbering, IRP, malware scanning, MFA, readings, hearings, committee reports, certified votes, and the public portal are not in this slice.
 
-LTAS is a Municipal Legislative Management Platform for a Philippine municipality and its Sangguniang Bayan. Each legislative measure is a digital case file. Phase 1 ships identity, scoped access, municipal structure, committee roster, and attributable audit. Phase 2 adds draft case files, versions, in-app tasks, and quarantined uploads.
+LTAS is a Municipal Legislative Management Platform for a Philippine municipality and its Sangguniang Bayan. Each legislative measure is a digital case file. Phase 1 ships identity, scoped access, municipal structure, committee roster, and attributable audit. Phase 2 adds draft case files, versions, in-app tasks, and quarantined uploads. Phase 3 adds lead/joint referrals, committee-scoped measure visibility, secretariat-recorded meetings, and committee/meeting quarantine uploads.
 
 Implementation was authorized on 2026-09-21. This is not production, municipal policy approval, or Phase 1 acceptance. Open decisions remain in [26](docs/26-DECISIONS-AND-ASSUMPTIONS.md). How to run, what is in scope, and remaining gates are in [28 Phase 1 foundation](docs/28-PHASE-1-FOUNDATION.md).
 
@@ -91,12 +91,16 @@ Start with overview, requirements, architecture, workflow, database, permissions
 | [28 Phase 1 foundation](docs/28-PHASE-1-FOUNDATION.md) | Implementation status, runbook and remaining gates |
 | [29 D-03 role bundles](docs/29-D-03-ROLE-BUNDLES.md) | Working paper: Phase 1 interim roles and emergency access |
 | [30 Phase 2 measures](docs/30-PHASE-2-MEASURES.md) | Draft case files, versions, quarantined uploads |
+| [31 Phase 3 referrals](docs/31-PHASE-3-REFERRALS.md) | Lead/joint referrals and CS-scoped case files |
+| [32 Phase 3 meetings](docs/32-PHASE-3-MEETINGS.md) | Committee meetings and committee/meeting documents |
+| [33 Phase 4 sessions](docs/33-PHASE-4-SESSIONS.md) | Sessions, calendar, roll-call, and document list |
+| [34 Phase 7/8 library and reports](docs/34-PHASE-7-LIBRARY-REPORTS.md) | Permission-filtered e-Library and descriptive counts |
 | [Documentation index](docs/README.md) | Baseline maintenance and precedence |
 
 ## Development phases
 
-0 Architecture and requirements; 1 Platform foundation; **2 Measures and documents (current engineering)**; 3 Committees and hearings; 4 Sessions; 5 Voting; 6 Post-approval workflow; 7 e-Library and codification; 8 Reports; 9 Public portal; 10 Production readiness. Security, testing, audit and restore exercises begin before their release gates, not only in Phase 10. AI intelligence is a separate future phase.
+0 Architecture and requirements; 1 Platform foundation; 2 Measures and documents; **3 Committees (referrals/meetings current; hearings later)**; 4 Sessions; 5 Voting; 6 Post-approval workflow; 7 e-Library and codification; 8 Reports; 9 Public portal; 10 Production readiness. Security, testing, audit and restore exercises begin before their release gates, not only in Phase 10. AI intelligence is a separate future phase.
 
 ## Next action
 
-Follow [28](docs/28-PHASE-1-FOUNDATION.md) to run the synthetic foundation locally. Phase 2 draft measures are in [30](docs/30-PHASE-2-MEASURES.md). D-03 is open as a working paper in [29](docs/29-D-03-ROLE-BUNDLES.md) (not yet signed). Remaining gates: D-03 confirmation, D-04 numbering, D-05/D-09/D-12/D-13/D-16. MySQL-backed access checks are `npm run test:mysql`. Isolated restore rehearsal is `LTAS_RESTORE_CONFIRM=ltas-restore-rehearsal npm run recovery -- rehearse`.
+Follow [28](docs/28-PHASE-1-FOUNDATION.md) to run the synthetic foundation locally. Phase 2–4 constrained slices and the library/report catalog are in [30](docs/30-PHASE-2-MEASURES.md), [31](docs/31-PHASE-3-REFERRALS.md), [32](docs/32-PHASE-3-MEETINGS.md), [33](docs/33-PHASE-4-SESSIONS.md), and [34](docs/34-PHASE-7-LIBRARY-REPORTS.md). D-03 is open as a working paper in [29](docs/29-D-03-ROLE-BUNDLES.md) (not yet signed). Remaining gates: D-03 confirmation, D-04 numbering, D-05/D-09/D-10/D-11/D-12/D-13/D-16. MySQL-backed access checks are `npm run test:mysql`. Isolated restore rehearsal is `LTAS_RESTORE_CONFIRM=ltas-restore-rehearsal npm run recovery -- rehearse`.

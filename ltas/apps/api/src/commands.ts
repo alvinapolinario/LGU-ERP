@@ -27,8 +27,10 @@ export class Commands {
         if(prior.requestHash !== requestHash) fail(409,'IDEMPOTENCY_MISMATCH','This retry key was already used with different input.');
         return prior.result as T;
       }
-      const overdue=await tx.outboxEvent.findFirst({where:{municipalityId,type:'audit.recorded',state:{not:'DELIVERED'},createdAt:{lt:new Date(Date.now()-this.ctx.config.AUDIT_MAX_LAG_SECONDS*1000)}}});
-      if(overdue) fail(503,'AUDIT_EXPORT_OVERDUE','Independent audit export is overdue. Ask the operator to restore the worker.');
+      if(this.ctx.config.NODE_ENV === 'production' || this.ctx.config.AUDIT_ENFORCE_EXPORT_LAG !== 'no') {
+        const overdue=await tx.outboxEvent.findFirst({where:{municipalityId,type:'audit.recorded',state:{not:'DELIVERED'},createdAt:{lt:new Date(Date.now()-this.ctx.config.AUDIT_MAX_LAG_SECONDS*1000)}}});
+        if(overdue) fail(503,'AUDIT_EXPORT_OVERDUE','Independent audit export is overdue. Ask the operator to restore the worker.');
+      }
       const {entityId,result,changes}=await work(tx);
       const cursor=await tx.auditCursor.findUniqueOrThrow({where:{municipalityId}});
       const content={id:randomUUID(),municipalityId,sequence:(cursor.sequence+1n).toString(),actorId,actorName:principal.displayName,action,entityId,correlationId:request.correlationId,payload:jsonValue(changes),previousHash:cursor.hash,recordedAt:new Date().toISOString()};

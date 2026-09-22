@@ -1,6 +1,6 @@
 # 29 — D-03 role bundles and emergency access
 
-**Status: working paper opened 2026-09-21. Q1–Q8 proposed 2026-09-21. Phase 2 engineering authorized 2026-09-21 (LS live in software per Q8). Not approved. Not municipal policy. §6 unsigned.**
+**Status: working paper opened 2026-09-21. Q1–Q8 proposed 2026-09-21. Phase 2 engineering authorized 2026-09-21 (LS live in software per Q8). Phase 3 referrals authorized 2026-09-22 (CS measure list is referral-scoped). Phase 3 meetings authorized 2026-09-22 (SEC municipality-wide; CS committee-scoped). Not approved. Not municipal policy. §6 unsigned.**
 
 Owners: Secretary to the Sanggunian, presiding officer, municipal IT.  
 Requirement: [LTAS-FR-ACCESS-002](02-FUNCTIONAL-REQUIREMENTS.md). Register: [D-03](26-DECISIONS-AND-ASSUMPTIONS.md). Software subset: [ADR-15](26-DECISIONS-AND-ASSUMPTIONS.md). Proposed full catalog: [06](06-USER-ROLES-AND-PERMISSIONS.md).
@@ -20,10 +20,10 @@ These are facts about the running foundation, not a claim that the municipality 
 | Role | Scope | Live permissions | Explicitly cannot |
 |---|---|---|---|
 | **SYS** | Municipality | Users, dual-control grants, municipality settings, terms (view), health | Committee business, measures, certify, vote, public release |
-| **SEC** | Municipality | Municipality settings, terms, people, committees, audit view, draft measures, `measure.file` (fails without D-04) | Identity administration, grant approval |
-| **AUD** | Municipality | View municipality, terms, committees, audit, measure/document metadata | Writes, quarantine download |
-| **CS** | **One committee** | View that committee, municipality, terms | Measure list (until P3 referrals), memberships, administration |
-| **LS** | Municipality | Draft create/edit/submit, versions, case uploads, in-app tasks/notices | Official numbering, certify, user administration |
+| **SEC** | Municipality | Municipality settings, terms, people, committees, referrals, meetings, sessions, secretary-entered attendance/tallies, audit view, draft measures, library/report view, `measure.file` (fails without D-04) | Identity administration, grant approval, certified votes, official archive |
+| **AUD** | Municipality | View municipality, terms, committees, referrals, meetings, audit, measure/document metadata, library/report view | Writes, quarantine download |
+| **CS** | **One committee** | View that committee, municipality, terms, and measures referred to it; manage/close that committee's meetings; upload committee/meeting files; scoped library/report view | Unreferred measures, memberships, administration, referral create/close, other committees' meetings, municipality-wide sessions |
+| **LS** | Municipality | Draft create/edit/submit, versions, case uploads, in-app tasks/notices, library/report view | Official numbering, certify, user administration |
 
 Grant rules already encoded:
 
@@ -65,7 +65,7 @@ Proposed for Secretary / presiding officer / IT confirmation. Blank means not ye
 | Proposed role | Why it waits |
 |---|---|
 | PO, COU | Sessions, quorum, voting (Phases 4–5); D-10 formulas |
-| CH, CM | Committee reports and referrals (Phase 3) |
+| CH, CM | Committee hearings and reports (later Phase 3). Secretariat-recorded referrals and meetings use SEC/CS only |
 | RO | Documents, classification, archive (Phases 2, 7, 9) |
 | LR | Legal assessment and rule approval (Phases 2–6) |
 | MAY, MA | Executive action and operational oversight (Phase 6, reports) |

@@ -27,6 +27,9 @@ model Municipality {
   documents Document[]
   tasks WorkTask[]
   notifications InAppNotification[]
+  referrals CommitteeReferral[]
+  meetings CommitteeMeeting[]
+  sessions LegislativeSession[]
   @@map("municipalities")
 }
 model User {
@@ -96,6 +99,7 @@ model CouncilTerm {
   createdAt DateTime @default(now()) @db.DateTime(3)
   committees Committee[]
   measures LegislativeMeasure[]
+  sessions LegislativeSession[]
   @@unique([municipalityId,label])
   @@unique([id,municipalityId])
   @@map("council_terms")
@@ -108,6 +112,7 @@ model Person {
   createdAt DateTime @default(now()) @db.DateTime(3)
   members CommitteeMember[]
   attributions MeasureAuthor[]
+  sessionAttendance SessionAttendance[]
   @@unique([id,municipalityId])
   @@index([municipalityId,displayName])
   @@map("persons")
@@ -123,6 +128,8 @@ model Committee {
   revision Int @default(1)
   createdAt DateTime @default(now()) @db.DateTime(3)
   members CommitteeMember[]
+  referrals CommitteeReferral[]
+  meetings CommitteeMeeting[]
   @@unique([municipalityId,termId,code])
   @@unique([id,municipalityId])
   @@map("committees")
@@ -234,6 +241,9 @@ model LegislativeMeasure {
   workflow WorkflowInstance?
   documents Document[]
   tasks WorkTask[]
+  referrals CommitteeReferral[]
+  sessionAgenda SessionAgendaItem[]
+  sessionVotes SessionVote[]
   @@unique([id,municipalityId])
   @@unique([municipalityId,officialSeries,officialYear,officialNumber], map:"measures_official_number_key")
   @@index([municipalityId,stage,createdAt])
@@ -263,6 +273,7 @@ model MeasureVersion {
   primaryDocumentVersionId String? @db.Char(36)
   frozenAt DateTime? @db.DateTime(3)
   createdAt DateTime @default(now()) @db.DateTime(3)
+  referrals CommitteeReferral[]
   @@unique([measureId,sequence])
   @@map("measure_versions")
 }
@@ -421,4 +432,135 @@ model InAppNotification {
   createdAt DateTime @default(now()) @db.DateTime(3)
   @@index([userId,createdAt])
   @@map("notifications")
+}
+model CommitteeReferral {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  measureId String @db.Char(36)
+  measure LegislativeMeasure @relation(fields:[measureId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  measureVersionId String @db.Char(36)
+  measureVersion MeasureVersion @relation(fields:[measureVersionId], references:[id], onDelete:Restrict)
+  committeeId String @db.Char(36)
+  committee Committee @relation(fields:[committeeId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  groupId String @db.Char(36)
+  referralSequence Int
+  role String @db.VarChar(20)
+  sourceKind String @db.VarChar(40)
+  referredOn DateTime @db.Date
+  dueOn DateTime? @db.Date
+  disposition String @db.VarChar(20)
+  closedAt DateTime? @db.DateTime(3)
+  closedBy String? @db.Char(36)
+  closeReason String? @db.VarChar(500)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  agendaItems MeetingReferral[]
+  @@unique([measureId,committeeId,referralSequence])
+  @@index([committeeId,disposition,dueOn])
+  @@index([municipalityId,groupId])
+  @@map("committee_referrals")
+}
+model CommitteeMeeting {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  committeeId String @db.Char(36)
+  committee Committee @relation(fields:[committeeId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  reference String @db.VarChar(30)
+  title String @db.VarChar(240)
+  venue String @db.VarChar(160)
+  scheduledAt DateTime @db.DateTime(3)
+  state String @db.VarChar(20)
+  closedAt DateTime? @db.DateTime(3)
+  closedBy String? @db.Char(36)
+  closeReason String? @db.VarChar(500)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  agenda MeetingReferral[]
+  @@unique([committeeId,reference])
+  @@index([committeeId,scheduledAt])
+  @@map("committee_meetings")
+}
+model MeetingReferral {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  meetingId String @db.Char(36)
+  meeting CommitteeMeeting @relation(fields:[meetingId], references:[id], onDelete:Restrict)
+  referralId String @db.Char(36)
+  referral CommitteeReferral @relation(fields:[referralId], references:[id], onDelete:Restrict)
+  measureVersionId String @db.Char(36)
+  sequence Int
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@unique([meetingId,referralId])
+  @@unique([meetingId,sequence])
+  @@index([referralId])
+  @@map("meeting_referrals")
+}
+model LegislativeSession {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  termId String @db.Char(36)
+  term CouncilTerm @relation(fields:[termId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  reference String @db.VarChar(30)
+  title String @db.VarChar(240)
+  venue String @db.VarChar(160)
+  kind String @db.VarChar(20)
+  scheduledAt DateTime @db.DateTime(3)
+  state String @db.VarChar(20)
+  closedAt DateTime? @db.DateTime(3)
+  closedBy String? @db.Char(36)
+  closeReason String? @db.VarChar(500)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  agenda SessionAgendaItem[]
+  attendance SessionAttendance[]
+  votes SessionVote[]
+  @@unique([municipalityId,reference])
+  @@index([municipalityId,scheduledAt])
+  @@map("legislative_sessions")
+}
+model SessionAgendaItem {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  sessionId String @db.Char(36)
+  session LegislativeSession @relation(fields:[sessionId], references:[id], onDelete:Restrict)
+  measureId String @db.Char(36)
+  measure LegislativeMeasure @relation(fields:[measureId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  measureVersionId String @db.Char(36)
+  sequence Int
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@unique([sessionId,measureId])
+  @@unique([sessionId,sequence])
+  @@index([measureId])
+  @@map("session_agenda_items")
+}
+model SessionAttendance {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  sessionId String @db.Char(36)
+  session LegislativeSession @relation(fields:[sessionId], references:[id], onDelete:Restrict)
+  personId String @db.Char(36)
+  person Person @relation(fields:[personId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  disposition String @db.VarChar(20)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@unique([sessionId,personId])
+  @@map("session_attendance")
+}
+model SessionVote {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  sessionId String @db.Char(36)
+  session LegislativeSession @relation(fields:[sessionId], references:[id], onDelete:Restrict)
+  measureId String @db.Char(36)
+  measure LegislativeMeasure @relation(fields:[measureId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  measureVersionId String @db.Char(36)
+  yesCount Int
+  noCount Int
+  abstainCount Int
+  result String @db.VarChar(20)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@unique([sessionId,measureId])
+  @@map("session_votes")
 }

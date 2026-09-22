@@ -42,8 +42,13 @@ services:
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Generate .env first}
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?Generate .env first}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Generate .env first}
-      KC_HOSTNAME: http://localhost:8081
-    ports: ["127.0.0.1:8081:8080", "[::1]:8081:8080"]
+      KC_HOSTNAME_STRICT: "false"
+      KC_SPI_THEME_CACHE_THEMES: "false"
+      KC_SPI_THEME_CACHE_TEMPLATES: "false"
+      KC_SPI_THEME_STATIC_MAX_AGE: "-1"
+    ports: ["8081:8080"]
+    volumes:
+      - ../keycloak/themes/ltas:/opt/keycloak/themes/ltas:ro
     depends_on:
       mysql: {condition: service_healthy}
     restart: unless-stopped

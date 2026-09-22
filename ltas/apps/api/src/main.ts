@@ -23,6 +23,14 @@ import { createObjectStore } from './domain/storage.js';
 import { MeasuresController, DocumentsController } from './measures.js';
 import { MeasuresService } from './measures.service.js';
 import { DocumentsService } from './documents.service.js';
+import { ReferralsController } from './referrals.js';
+import { ReferralsService } from './referrals.service.js';
+import { MeetingsController } from './meetings.js';
+import { MeetingsService } from './meetings.service.js';
+import { SessionsController } from './sessions.js';
+import { SessionsService } from './sessions.service.js';
+import { LibraryController } from './library.js';
+import { LibraryService } from './library.service.js';
 
 export async function bootstrap():Promise<void> {
   const config=readConfig();
@@ -32,7 +40,7 @@ export async function bootstrap():Promise<void> {
   const store=await createObjectStore(config);
   await Promise.all([db.$connect(),redis.connect()]);
   const ctx:AppContext={db,redis,config,store};
-  @Module({controllers:[AuthController,AdministrationController,HealthController,MeasuresController,DocumentsController],providers:[{provide:CONTEXT,useValue:ctx},Commands,AdministrationService,MeasuresService,DocumentsService,SessionGuard]})
+  @Module({controllers:[AuthController,AdministrationController,HealthController,MeasuresController,DocumentsController,ReferralsController,MeetingsController,SessionsController,LibraryController],providers:[{provide:CONTEXT,useValue:ctx},Commands,AdministrationService,MeasuresService,DocumentsService,ReferralsService,MeetingsService,SessionsService,LibraryService,SessionGuard]})
   class AppModule {}
   const app=await NestFactory.create<NestExpressApplication>(AppModule,{logger:['error','warn','log'],bodyParser:false});
   app.set('trust proxy',config.NODE_ENV==='production'?1:false);
