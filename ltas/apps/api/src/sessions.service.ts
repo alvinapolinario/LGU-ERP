@@ -37,6 +37,7 @@ export class SessionsService {
     return {data:await this.commands.execute(r,'session.manage','session.created',input,async tx=>{
       const term=await tx.councilTerm.findFirst({where:{id:input.termId,...this.scope(r)}});
       if(!term) fail(404,'NOT_FOUND','Council term not found.');
+      if(await tx.person.count({where:{termId:input.termId,...this.scope(r)}})==0) fail(422,'TERM_WITHOUT_COUNCIL','Encode the people of this council term before using it.');
       const scheduledAt=new Date(input.scheduledAt);
       const year=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric'}).format(scheduledAt);
       const prior=await tx.legislativeSession.count({where:{municipalityId:r.principal.municipalityId,reference:{startsWith:`S-${year}-`}}});
@@ -93,6 +94,7 @@ export class SessionsService {
       if(session.state!=='SCHEDULED') fail(422,'SESSION_CLOSED','Closed sessions cannot change attendance.');
       const person=await tx.person.findFirst({where:{id:input.personId,...this.scope(r)}});
       if(!person) fail(404,'NOT_FOUND','Person not found.');
+      if(person.termId!==session.termId) fail(422,'TERM_MISMATCH','Attendance must use a person encoded on this council term.');
       const existing=await tx.sessionAttendance.findFirst({where:{sessionId:id,personId:input.personId}});
       if(existing) await tx.sessionAttendance.update({where:{id:existing.id},data:{disposition:input.disposition}});
       else await tx.sessionAttendance.create({data:{id:randomUUID(),municipalityId:r.principal.municipalityId,sessionId:id,personId:input.personId,disposition:input.disposition}});

@@ -52,7 +52,7 @@ describe.skipIf(!live)('T-FR-COMMITTEE-002 MySQL 8.4 meeting gates',{timeout:300
     await migrator.$transaction(async tx=>{
       await tx.municipality.create({data:{id:municipalityId,code,name:'Meeting Test Municipality (Fictional)',province:'Demonstration'}});
       await tx.councilTerm.create({data:{id:termId,municipalityId,label:'Meeting term',startsOn:new Date('2025-07-01'),endsOn:new Date('2028-06-30')}});
-      await tx.person.create({data:{id:personId,municipalityId,displayName:'Taylor Mendoza'}});
+      await tx.person.create({data:{id:personId,municipalityId,termId,displayName:'Taylor Mendoza'}});
       await tx.committee.create({data:{id:leadId,municipalityId,termId,code:'GOOD-GOV',name:'Committee on Good Governance'}});
       await tx.committee.create({data:{id:jointId,municipalityId,termId,code:'WAYS-MEANS',name:'Committee on Ways and Means'}});
       for(const [id,name] of [[sysId,'Sys Gate'],[secId,'Secretary Gate'],[lsId,'Staff Gate'],[csLeadId,'Lead Staff'],[csJointId,'Joint Staff']] as const) {
@@ -146,6 +146,7 @@ describe.skipIf(!live)('T-FR-COMMITTEE-002 MySQL 8.4 meeting gates',{timeout:300
     await documents.storeContent(await actor(secId),committeeIntent.data.id,Buffer.from('%PDF-1.4 fixture'));
     const committeeFile=await documents.finalize(await actor(secId),committeeIntent.data.id,{reason});
     expect(committeeFile.data.latestState).toBe('QUARANTINED');
+    expect(committeeFile.data.currentReadyVersionId).toBeNull();
     const meetingIntent=await documents.createIntent(await actor(csLeadId),{ownerType:'MEETING',ownerId:scheduled.data.id,originalFilename:'minutes-draft.pdf',declaredMime:'application/pdf',expectedBytes:20,reason});
     await documents.storeContent(await actor(csLeadId),meetingIntent.data.id,Buffer.from('%PDF-1.4 fixture'));
     const meetingFile=await documents.finalize(await actor(csLeadId),meetingIntent.data.id,{reason});

@@ -1,6 +1,6 @@
 # Planning baseline
 
-**PHASE 1–4 IMPLEMENTATION plus constrained library/reports** — platform foundation through constrained sessions/roll-call/document list and a permission-filtered e-Library/report catalog are authorized. Numbered documents 00–27 remain the design baseline; they are not a claim of municipal policy approval or production readiness. See [28](28-PHASE-1-FOUNDATION.md), [29](29-D-03-ROLE-BUNDLES.md), [30](30-PHASE-2-MEASURES.md), [31](31-PHASE-3-REFERRALS.md), [32](32-PHASE-3-MEETINGS.md), [33](33-PHASE-4-SESSIONS.md), and [34](34-PHASE-7-LIBRARY-REPORTS.md).
+**PHASE 1–4 IMPLEMENTATION, plus constrained library/reports, a demonstration public catalog, and a historical ordinance register.** Platform foundation through constrained sessions/roll-call/document list, a permission-filtered e-Library/report catalog, the catalog at `/home`, and the prior-term ordinance register are authorized. Numbered documents 00–27 remain the design baseline; they are not a claim of municipal policy approval or production readiness. See [28](28-PHASE-1-FOUNDATION.md), [29](29-D-03-ROLE-BUNDLES.md), [30](30-PHASE-2-MEASURES.md), [31](31-PHASE-3-REFERRALS.md), [32](32-PHASE-3-MEETINGS.md), [33](33-PHASE-4-SESSIONS.md), [34](34-PHASE-7-LIBRARY-REPORTS.md), [15](15-PUBLIC-PORTAL.md), and [35](35-HISTORICAL-ORDINANCES.md).
 
 Use the [master navigation](../README.md) for every planning document, stack, directory, and phase. Baseline date: 2026-09-21. Implementation authorization date: 2026-09-21.
 

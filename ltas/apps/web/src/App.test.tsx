@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { App } from './App';
-afterEach(() => {cleanup(); vi.unstubAllGlobals();});
+afterEach(() => {cleanup(); vi.unstubAllGlobals(); window.history.pushState({}, '', '/');});
 function json(body:unknown, status = 200) {
   return {ok:status < 400, status, json:async() => body};
 }
@@ -15,11 +15,36 @@ describe('workspace boundaries', () => {
   it('offers Keycloak login when unauthenticated, without a demo bypass', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({status:401, detail:'Sign in', code:'LOGIN_REQUIRED'}, 401)));
     mount();
-    expect(await screen.findByRole('link', {name:/Sign in securely/})).toHaveAttribute('href', '/api/v1/auth/login');
-    expect(screen.getByRole('heading', {name:'Welcome to your workspace'})).toBeInTheDocument();
-    expect(screen.getByRole('heading', {name:'Municipality of San Isidro'})).toBeInTheDocument();
+    expect(await screen.findByRole('link', {name:/Sign In/})).toHaveAttribute('href', '/api/v1/auth/login');
+    expect(screen.getByRole('heading', {name:/Welcome Back/})).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name:/legislative knowledge base/})).toBeInTheDocument();
+    expect(screen.getByLabelText('Username')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toBeInTheDocument();
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', {name:/demo/i})).not.toBeInTheDocument();
+    expect(screen.getByRole('link', {name:/Back to home/})).toHaveAttribute('href', '/home');
+  });
+  it('opens the public catalog without a staff session', async () => {
+    window.history.pushState({}, '', '/home');
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url:string) => {
+      if (String(url).includes('/public/home')) return json({data:{municipality:{name:'Municipality of San Isidro (Fictional)', province:'Demonstration', code:'DEMO-001'}, term:{label:'2025–2028 demonstration term', startsOn:'2025-07-01', endsOn:'2028-06-30'}, stats:{measures:1, people:8, committees:2, sessions:0}, recentMeasures:[{id:'m1', typeCode:'ORDINANCE', title:'An Ordinance Establishing a Draft Record', subject:'Synthetic', stage:'DRAFT', officialSeries:null, officialYear:null, officialNumber:null, createdAt:'2026-09-22T00:00:00.000Z', authors:[{displayName:'Taylor Mendoza', role:'AUTHOR'}]}], officers:{mayor:null, viceMayor:{id:'p5', displayName:'Hayden Cruz', positionCode:'VICE_MAYOR', hasPhoto:false}, secretary:null}, note:'Demonstration public catalog'}});
+      return json({items:[], pageInfo:{page:1, limit:25, total:0}});
+    }));
+    mount();
+    expect(await screen.findByRole('heading', {name:'Legislative Tracking & Analysis System'})).toBeInTheDocument();
+    expect(await screen.findByText('An Ordinance Establishing a Draft Record')).toBeInTheDocument();
+    expect(screen.queryByText('Synthetic')).not.toBeInTheDocument();
+    expect(screen.queryByText('Taylor Mendoza')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recorded stage')).not.toBeInTheDocument();
+    expect(screen.getByText('Hayden Cruz')).toBeInTheDocument();
+    expect(screen.getAllByText('GOVPH').length).toBeGreaterThan(0);
+    expect(document.querySelector('img[src="/brand/libungan-seal.png"]')).toBeTruthy();
+    expect(screen.getByRole('img', {name:'Philippine Transparency Seal'})).toBeInTheDocument();
+    expect(document.querySelector('img[src="/brand/foi.png"]')).toBeTruthy();
+    expect(document.querySelector('img[src="/brand/bagong_pilipinas.png"]')).toBeTruthy();
+    expect(screen.getByText(/not the official/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', {name:/Sign in securely/})).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name:'Open catalog'}));
   });
   it('does not show administrative pages to a scoped committee user', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url:string) => {
@@ -73,7 +98,7 @@ describe('workspace boundaries', () => {
       if (String(url).includes('/measures/m1')) return json({data:{id:'m1', typeCode:'ORDINANCE', termId:'t', title:'An Ordinance Establishing a Draft Record', subject:'Synthetic', stage:'DRAFT', classification:'INTERNAL', officialSeries:null, officialYear:null, officialNumber:null, currentVersionId:null, revision:1, authors:[{personId:'p1', role:'AUTHOR', ordering:0, displayName:'Taylor Mendoza'}], versions:[{id:'v1', sequence:1, synopsis:'First synopsis', frozenAt:null}]}});
       if (String(url).includes('/measures')) return json({items:[{id:'m1', typeCode:'ORDINANCE', termId:'t', title:'An Ordinance Establishing a Draft Record', subject:'Synthetic', stage:'DRAFT', classification:'INTERNAL', officialSeries:null, officialYear:null, officialNumber:null, currentVersionId:null, revision:1}], pageInfo:{page:1, limit:100, total:1}});
       if (String(url).includes('/admin/terms')) return json({items:[{id:'t', label:'2025–2028 demonstration term', startsOn:'2025-07-01', endsOn:'2028-06-30', revision:1}], pageInfo:{page:1, limit:100, total:1}});
-      if (String(url).includes('/admin/persons')) return json({items:[{id:'p1', displayName:'Taylor Mendoza'}], pageInfo:{page:1, limit:100, total:1}});
+      if (String(url).includes('/admin/persons')) return json({items:[{id:'p1', displayName:'Taylor Mendoza', positionCode:'COUNCILOR', hasPhoto:false}], pageInfo:{page:1, limit:100, total:1}});
       return json({items:[], pageInfo:{page:1, limit:25, total:0}});
     }));
     mount();
@@ -91,8 +116,18 @@ describe('workspace boundaries', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name:'Create draft'}));
     expect(screen.getByRole('dialog', {name:'New draft measure'})).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Type'), {target:{value:'RESOLUTION'}});
+    fireEvent.change(screen.getByLabelText('Title'), {target:{value:'Market hours'}});
+    expect(screen.queryByLabelText('Reason for this change')).not.toBeInTheDocument();
+    expect(document.querySelector('input[name="reason"]')).toHaveValue('Creating new Resolution Market hours');
     expect(screen.getByLabelText('Title')).toBeInTheDocument();
     expect(screen.getByLabelText('Synopsis')).toBeInTheDocument();
+    expect(screen.getByLabelText('Author')).toBeInTheDocument();
+    expect(await screen.findByRole('option', {name:'2025–2028 demonstration term'})).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Council term'), {target:{value:'t'}});
+    fireEvent.click(screen.getByRole('button', {name:'Add co-author'}));
+    expect(screen.getByLabelText('Co-author 1')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name:'Remove co-author 1'})).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name:'Close'}));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', {name:'View full screen'}));
@@ -102,7 +137,79 @@ describe('workspace boundaries', () => {
     fireEvent.click(screen.getAllByRole('button', {name:'People'})[0]!);
     expect(await screen.findByRole('heading', {name:'People'})).toBeInTheDocument();
     expect(await screen.findByText('Taylor Mendoza')).toBeInTheDocument();
-    expect(screen.getByText(/Not elected-office records/)).toBeInTheDocument();
+    expect(screen.getByText('Councilor')).toBeInTheDocument();
+    expect(screen.getByText(/not a legal seat/i)).toBeInTheDocument();
+  });
+  it('lets the secretary record a directory position when adding a person', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url:string) => {
+      if (String(url).includes('/auth/session')) return json({data:{user:{id:'u', displayName:'Jamie Cruz', municipalityId:'m'}, permissions:['person.view','person.manage'], csrfToken:'test'}});
+      return json({items:[], pageInfo:{page:1, limit:25, total:0}});
+    }));
+    mount();
+    fireEvent.click((await screen.findAllByRole('button', {name:'People'}))[0]!);
+    expect(await screen.findByRole('heading', {name:'People'})).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Add person'));
+    expect(screen.getByLabelText('Position')).toBeInTheDocument();
+    expect(screen.getByRole('option', {name:'Mayor'})).toBeInTheDocument();
+    expect(screen.getByRole('option', {name:'Vice Mayor'})).toBeInTheDocument();
+    expect(screen.getByRole('option', {name:'Councilor'})).toBeInTheDocument();
+    expect(screen.getByRole('option', {name:'SB Secretary'})).toBeInTheDocument();
+    expect(screen.getByRole('option', {name:'SB Staff'})).toBeInTheDocument();
+    expect(screen.getByRole('option', {name:'Other'})).toBeInTheDocument();
+  });
+  it('shows a directory photograph beside the name when one is on file', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url:string) => {
+      if (String(url).includes('/auth/session')) return json({data:{user:{id:'u', displayName:'Jamie Cruz', municipalityId:'m'}, permissions:['person.view','person.manage'], csrfToken:'test'}});
+      if (String(url).includes('/admin/persons')) return json({items:[{id:'p1', displayName:'Taylor Mendoza', positionCode:'COUNCILOR', hasPhoto:true, photoVersion:'abc'}], pageInfo:{page:1, limit:25, total:1}});
+      return json({items:[], pageInfo:{page:1, limit:25, total:0}});
+    }));
+    mount();
+    fireEvent.click((await screen.findAllByRole('button', {name:'People'}))[0]!);
+    expect(await screen.findByText('Taylor Mendoza')).toBeInTheDocument();
+    const photo = document.querySelector('img.face') as HTMLImageElement | null;
+    expect(photo?.getAttribute('src')).toContain('/api/v1/admin/persons/p1/photo');
+    expect(screen.getByText('Replace photo')).toBeInTheDocument();
+  });
+  it('opens a direct ordinance encoding form without a legislative measure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url:string) => {
+      if (String(url).includes('/auth/session')) return json({data:{user:{id:'u', displayName:'Jamie Cruz', municipalityId:'m'}, permissions:['archive.view','archive.encode','term.view'], csrfToken:'test'}});
+      if (String(url).includes('/admin/terms')) return json({items:[{id:'t', label:'2013-2016 16th SB Council', startsOn:'2013-06-30', endsOn:'2016-06-30', revision:1}], pageInfo:{page:1, limit:100, total:1}});
+      if (String(url).includes('/archives/ordinances')) return json({items:[], pageInfo:{page:1, limit:50, total:0}, note:'Historical ordinance register.'});
+      return json({items:[], pageInfo:{page:1, limit:25, total:0}});
+    }));
+    mount();
+    fireEvent.click(await screen.findByRole('button', {name:'Ordinance archive'}));
+    expect(await screen.findByRole('heading', {name:'Ordinance archive'})).toBeInTheDocument();
+    expect(screen.getByText(/does not open a legislative measure/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name:'Encode ordinance'}));
+    expect(screen.getByRole('dialog', {name:'Encode ordinance'})).toBeInTheDocument();
+    expect(screen.getByLabelText('Council term')).toBeInTheDocument();
+    expect(screen.getByLabelText('Title')).toBeInTheDocument();
+    expect(screen.getByLabelText('Where this copy came from')).toBeInTheDocument();
+    expect(screen.getByText(/does not create a draft measure/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name:'Close'}));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+  it('opens a legislative record from a person name', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url:string) => {
+      if (String(url).includes('/auth/session')) return json({data:{user:{id:'u', displayName:'Jamie Cruz', municipalityId:'m'}, permissions:['person.view'], csrfToken:'test'}});
+      if (String(url).includes('/admin/persons/p1/profile')) return json({data:{id:'p1', displayName:'Taylor Mendoza', positionCode:'COUNCILOR', hasPhoto:false, termsListed:1, authored:2, coAuthored:1, note:'Directory rows with this display name. A position label is not a certified service history. Authored counts are submitted records only.', seats:[{termId:'t', termLabel:'2025–2028 20th SB Council', startsOn:'2025-06-30', endsOn:'2028-06-30', positionCode:'COUNCILOR', authored:2, coAuthored:1, committees:[{name:'Committee on Ways and Means', role:'CHAIR', active:true}]}]}});
+      if (String(url).includes('/admin/persons')) return json({items:[{id:'p1', displayName:'Taylor Mendoza', positionCode:'COUNCILOR', hasPhoto:false}], pageInfo:{page:1, limit:25, total:1}});
+      return json({items:[], pageInfo:{page:1, limit:25, total:0}});
+    }));
+    mount();
+    fireEvent.click((await screen.findAllByRole('button', {name:'People'}))[0]!);
+    fireEvent.click(await screen.findByRole('button', {name:'View legislative record for Taylor Mendoza'}));
+    expect(await screen.findByRole('dialog', {name:'Taylor Mendoza'})).toBeInTheDocument();
+    expect(await screen.findByText('Terms listed')).toBeInTheDocument();
+    expect(screen.getAllByText('Authored').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Co-authored').length).toBeGreaterThan(0);
+    expect(screen.getByText('2025–2028 20th SB Council')).toBeInTheDocument();
+    expect(screen.getByText(/Ways and Means/)).toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.getByText(/submitted records only/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name:'Close'}));
+    expect(screen.queryByRole('dialog', {name:'Taylor Mendoza'})).not.toBeInTheDocument();
   });
   it('lets committee staff open referred measures without creating drafts', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url:string) => {
@@ -329,5 +436,27 @@ describe('workspace boundaries', () => {
     expect(await screen.findByRole('heading', {name:'An Ordinance Establishing a Draft Record'})).toBeInTheDocument();
     expect(await screen.findByText(/Close every open referral before withdrawing/)).toBeInTheDocument();
     expect(screen.queryByText('Withdraw')).not.toBeInTheDocument();
+  });
+  it('opens footer notices and offers a committee picker for staff grants', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url:string) => {
+      if (String(url).includes('/auth/session')) return json({data:{user:{id:'u', displayName:'Jamie Cruz', municipalityId:'m'}, permissions:['user.view','user.manage','role.assign','municipality.view'], csrfToken:'test'}});
+      if (String(url).includes('/admin/municipality')) return json({data:{id:'m', name:'Municipality of Libungan', province:'North Cotabato', code:'DEMO-001', timezone:'Asia/Manila', revision:1}});
+      if (String(url).includes('/admin/grant-committees')) return json({items:[{id:'c1', name:'Committee on Good Governance', code:'GOOD-GOV', termLabel:'2025–2028'}]});
+      if (String(url).includes('/admin/users')) return json({items:[{id:'other', displayName:'Reese Bautista', subject:'subject', enabled:true, revision:1}], pageInfo:{page:1, limit:100, total:1}});
+      if (String(url).includes('/admin/grant-requests') || String(url).includes('/admin/grants')) return json({items:[], pageInfo:{page:1, limit:25, total:0}});
+      return json({items:[], pageInfo:{page:1, limit:25, total:0}});
+    }));
+    mount();
+    fireEvent.click(await screen.findByRole('button', {name:'Privacy Policy'}));
+    expect(await screen.findByRole('dialog', {name:'Privacy Policy'})).toBeInTheDocument();
+    expect(screen.getByText(/does not publish the Municipality of Libungan privacy notice/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name:'Close'}));
+    fireEvent.click((await screen.findAllByRole('button', {name:'Users & Access'}))[0]!);
+    fireEvent.click(await screen.findByRole('button', {name:'Access review'}));
+    fireEvent.click(await screen.findByRole('button', {name:'Request access grant'}));
+    fireEvent.change(screen.getByLabelText('Role'), {target:{value:'CS'}});
+    expect(await screen.findByLabelText('Committee')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Committee ID')).not.toBeInTheDocument();
+    expect(await screen.findByRole('option', {name:'Committee on Good Governance · 2025–2028'})).toBeInTheDocument();
   });
 });

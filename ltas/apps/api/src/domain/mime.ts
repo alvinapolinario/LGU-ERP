@@ -7,3 +7,8 @@ export function detectMime(body:Buffer,declared:string):string {
   if(body.length>=4 && body[0]===0x50 && body[1]===0x4b && declared==='application/vnd.openxmlformats-officedocument.wordprocessingml.document') return declared;
   fail(422,'UNSUPPORTED_TYPE','The file signature is not an allowed PDF, DOCX, JPEG, PNG or TIFF.');
 }
+export function detectPhotoMime(body:Buffer):string {
+  const mime=detectMime(body,'image/jpeg');
+  if(mime!=='image/jpeg' && mime!=='image/png') fail(422,'UNSUPPORTED_TYPE','Use a JPEG or PNG photograph.');
+  return mime;
+}

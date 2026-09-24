@@ -45,7 +45,7 @@ Phase numbers refer to [19](19-DEVELOPMENT-ROADMAP.md). API paths refer to [09](
 | LTAS-FR-PORTAL-001 | Public portal | `/api/public/v1` | public_releases, public_release_documents | T-FR-PORTAL-001 → AC-PORTAL-001 | 9 | Guessed internal IDs disclose no private data |
 | LTAS-FR-PORTAL-002 | Public releases | `/public-releases` | public_releases, public_release_documents | T-FR-PORTAL-002 → AC-PORTAL-002 | 9 | Withdrawal blocks future search/download access |
 | LTAS-FR-IMPORT-001 | Archive / Import | `/imports` | import_batches, import_items, archive_accessions | T-FR-IMPORT-001 → AC-IMPORT-001 | 7 | Duplicates staged and unknown history not fabricated |
-| LTAS-FR-ARCHIVE-001 | Archive | `/archives` | archive_accessions, retention_holds | T-FR-ARCHIVE-001 → AC-ARCHIVE-001 | 7 | Accession preserves completeness and outstanding obligations |
+| LTAS-FR-ARCHIVE-001 | Archive | `/archives` | archive_accessions, retention_holds, historical_ordinances | T-FR-ARCHIVE-001 → AC-ARCHIVE-001 | 7 | Full accession remains later. The constrained register encodes a prior-term ordinance without inventing readings, votes, or a certified copy |
 | LTAS-FR-IMPLEMENTATION-001 | Implementation review | `/implementation-reviews` | implementation_reviews, tasks | T-FR-IMPLEMENTATION-001 → AC-IMPLEMENTATION-001 | 7 | Operational finding does not alter legal status |
 
 ## Non-functional requirements

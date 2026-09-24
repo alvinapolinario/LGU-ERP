@@ -12,17 +12,18 @@ export const permissions = [
   'measure.view', 'measure.create', 'measure.edit', 'measure.submit', 'measure.file', 'measure.version.create',
   'document.upload', 'document.view', 'document.download',
   'library.view', 'report.view',
+  'archive.view', 'archive.encode',
   'task.assign', 'task.manage', 'notification.view',
 ] as const;
 export type Permission = typeof permissions[number];
 export const roles = ['SYS', 'SEC', 'AUD', 'CS', 'LS'] as const;
 export type Role = typeof roles[number];
-const staffMeasure: readonly Permission[] = ['municipality.view', 'term.view', 'person.view', 'committee.view', 'committee.referral.view', 'committee.meeting.view', 'session.view', 'attendance.record', 'vote.view', 'measure.view', 'measure.create', 'measure.edit', 'measure.submit', 'measure.version.create', 'document.upload', 'document.view', 'document.download', 'library.view', 'report.view', 'task.assign', 'task.manage', 'notification.view'];
+const staffMeasure: readonly Permission[] = ['municipality.view', 'term.view', 'person.view', 'committee.view', 'committee.referral.view', 'committee.meeting.view', 'session.view', 'attendance.record', 'vote.view', 'measure.view', 'measure.create', 'measure.edit', 'measure.submit', 'measure.version.create', 'document.upload', 'document.view', 'document.download', 'library.view', 'report.view', 'archive.view', 'task.assign', 'task.manage', 'notification.view'];
 const committeeStaff: readonly Permission[] = ['municipality.view', 'term.view', 'committee.view', 'committee.referral.view', 'committee.meeting.view', 'committee.meeting.manage', 'committee.meeting.close', 'measure.view', 'document.upload', 'document.view', 'document.download', 'library.view', 'report.view', 'task.assign', 'task.manage', 'notification.view'];
 export const rolePermissions: Record<Role, readonly Permission[]> = {
   SYS: ['municipality.view', 'settings.manage', 'user.view', 'user.manage', 'role.assign', 'grant.approve', 'term.view', 'person.view', 'system.monitor'],
-  SEC: ['municipality.view', 'settings.manage', 'term.view', 'term.manage', 'person.view', 'person.manage', 'committee.view', 'committee.manage', 'committee.members.manage', 'committee.referral.view', 'committee.referral.create', 'committee.referral.close', 'committee.meeting.view', 'committee.meeting.manage', 'committee.meeting.close', 'session.view', 'session.manage', 'session.close', 'attendance.record', 'vote.view', 'vote.record', 'audit.view', 'measure.view', 'measure.create', 'measure.edit', 'measure.submit', 'measure.file', 'measure.version.create', 'document.upload', 'document.view', 'document.download', 'library.view', 'report.view', 'task.assign', 'task.manage', 'notification.view'],
-  AUD: ['municipality.view', 'term.view', 'person.view', 'committee.view', 'committee.referral.view', 'committee.meeting.view', 'session.view', 'vote.view', 'audit.view', 'measure.view', 'document.view', 'library.view', 'report.view'],
+  SEC: ['municipality.view', 'settings.manage', 'term.view', 'term.manage', 'person.view', 'person.manage', 'committee.view', 'committee.manage', 'committee.members.manage', 'committee.referral.view', 'committee.referral.create', 'committee.referral.close', 'committee.meeting.view', 'committee.meeting.manage', 'committee.meeting.close', 'session.view', 'session.manage', 'session.close', 'attendance.record', 'vote.view', 'vote.record', 'audit.view', 'measure.view', 'measure.create', 'measure.edit', 'measure.submit', 'measure.file', 'measure.version.create', 'document.upload', 'document.view', 'document.download', 'library.view', 'report.view', 'archive.view', 'archive.encode', 'task.assign', 'task.manage', 'notification.view'],
+  AUD: ['municipality.view', 'term.view', 'person.view', 'committee.view', 'committee.referral.view', 'committee.meeting.view', 'session.view', 'vote.view', 'audit.view', 'measure.view', 'document.view', 'library.view', 'report.view', 'archive.view'],
   CS: committeeStaff,
   LS: staffMeasure,
 };
@@ -34,7 +35,38 @@ const instant = z.iso.datetime({ offset: true });
 export const revisionSchema = z.number().int().positive();
 export const municipalitySchema = z.object({ name: text(160), province: text(100), expectedRevision: revisionSchema, reason: reasonSchema }).strict();
 export const termSchema = z.object({ label: text(80), startsOn: date, endsOn: date, reason: reasonSchema }).strict().refine(v => v.endsOn >= v.startsOn, {message:'End date must follow start date', path:['endsOn']});
-export const personSchema = z.object({ displayName: text(160), reason: reasonSchema }).strict();
+export const termUpdateSchema = z.object({ label: text(80), startsOn: date, endsOn: date, expectedRevision: revisionSchema, reason: reasonSchema }).strict().refine(v => v.endsOn >= v.startsOn, {message:'End date must follow start date', path:['endsOn']});
+export const personPositions = ['MAYOR', 'VICE_MAYOR', 'COUNCILOR', 'LIGA_PRESIDENT', 'SK_PRESIDENT', 'SB_SECRETARY', 'SB_STAFF', 'OTHER'] as const;
+export type PersonPosition = typeof personPositions[number];
+export const personPositionLabels: Record<PersonPosition, string> = {
+  MAYOR: 'Mayor',
+  VICE_MAYOR: 'Vice Mayor',
+  COUNCILOR: 'Councilor',
+  LIGA_PRESIDENT: 'Liga ng mga Barangay President',
+  SK_PRESIDENT: 'SK Federation President',
+  SB_SECRETARY: 'SB Secretary',
+  SB_STAFF: 'SB Staff',
+  OTHER: 'Other',
+};
+export function personPositionLabel(code:string) {
+  return personPositionLabels[code as PersonPosition] ?? personPositionLabels.OTHER;
+}
+export function personPositionRank(code:string) {
+  const index = personPositions.indexOf(code as PersonPosition);
+  return index === -1 ? personPositions.length : index;
+}
+export function comparePeopleByPosition(left:{positionCode:string; displayName:string; id?:string}, right:{positionCode:string; displayName:string; id?:string}) {
+  const rank = personPositionRank(left.positionCode) - personPositionRank(right.positionCode);
+  if (rank !== 0) return rank;
+  const name = left.displayName.localeCompare(right.displayName, 'en');
+  if (name !== 0) return name;
+  return (left.id ?? '').localeCompare(right.id ?? '');
+}
+export const personSchema = z.object({ displayName: text(160), positionCode: z.enum(personPositions), termId: idSchema, reason: reasonSchema }).strict();
+export const personUpdateSchema = z.object({ displayName: text(160), positionCode: z.enum(personPositions), expectedRevision: revisionSchema, reason: reasonSchema }).strict();
+export const personListSchema = z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(25), termId: idSchema.optional() }).strict();
+export const personPhotoSchema = z.object({ reason: reasonSchema }).strict();
+export const PERSON_PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 export const committeeSchema = z.object({ termId: idSchema, code: z.string().regex(/^[A-Z][A-Z0-9_-]{1,29}$/), name: text(160), reason: reasonSchema }).strict();
 export const memberSchema = z.object({ personId: idSchema, role: z.enum(['CHAIR', 'VICE_CHAIR', 'MEMBER', 'STAFF']), startsOn: date, endsOn: date, expectedRevision: revisionSchema, reason: reasonSchema }).strict().refine(v => v.endsOn >= v.startsOn, {message:'End date must follow start date', path:['endsOn']});
 export const userSchema = z.object({ subject: text(255), displayName: text(160), reason: reasonSchema }).strict();
@@ -42,6 +74,14 @@ export const userStateSchema = z.object({ enabled: z.boolean(), expectedRevision
 export const grantSchema = z.object({ userId: idSchema, role: z.enum(roles), scopeType: z.enum(['MUNICIPALITY', 'COMMITTEE']), scopeId: idSchema, validFrom: instant, validUntil: instant, reason: reasonSchema }).strict().refine(v => new Date(v.validUntil) > new Date(v.validFrom), {message:'Grant expiry must follow its start',path:['validUntil']}).refine(v => v.scopeType === 'MUNICIPALITY' || v.role === 'CS', {message:'Only committee staff grants may have committee scope',path:['scopeType']}).refine(v => v.role !== 'CS' || v.scopeType === 'COMMITTEE', {message:'Committee staff require a specific committee',path:['scopeType']});
 export const reviewSchema = z.object({ expectedRevision: revisionSchema, reason: reasonSchema }).strict();
 export const paginationSchema = z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(25) }).strict();
+export const publicCouncilQuerySchema = z.object({ termId: idSchema.optional() }).strict();
+export const publicMeasureQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  q: z.string().trim().max(120).optional().default(''),
+  typeCode: z.enum(['ORDINANCE', 'RESOLUTION']).optional(),
+}).strict();
+export const PUBLIC_CATALOG_NOTE = 'Demonstration public catalog of records already stored in this LTAS installation. Not an official publication, approved release, or Phase 9 portal.';
 export const contributionRole = z.enum(['AUTHOR', 'CO_AUTHOR', 'SPONSOR']);
 export const measureCreateSchema = z.object({
   typeCode: z.enum(['ORDINANCE', 'RESOLUTION']),
@@ -128,6 +168,45 @@ export const sessionVoteSchema = z.object({
   expectedRevision: revisionSchema,
   reason: reasonSchema,
 }).strict();
+export const HISTORICAL_SCAN_MAX_BYTES = 12 * 1024 * 1024;
+const optionalYear = z.number().int().min(1900).max(2100).nullable().optional();
+const optionalNumber = z.string().trim().min(1).max(40).nullable().optional();
+export const historicalOrdinanceSchema = z.object({
+  termId: idSchema,
+  title: text(240),
+  officialYear: optionalYear,
+  officialNumber: optionalNumber,
+  sourceNote: text(500),
+  reason: reasonSchema,
+}).strict();
+export const historicalOrdinanceUpdateSchema = z.object({
+  title: text(240),
+  officialYear: optionalYear,
+  officialNumber: optionalNumber,
+  sourceNote: text(500),
+  expectedRevision: revisionSchema,
+  reason: reasonSchema,
+}).strict();
+export const historicalOrdinanceTextSchema = z.object({
+  extractedText: z.string().max(200_000),
+  expectedRevision: revisionSchema,
+  reason: reasonSchema,
+}).strict();
+export const historicalOrdinanceQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  q: z.string().trim().max(120).default(''),
+  termId: idSchema.optional(),
+}).strict();
+export interface HistoricalOrdinance {
+  id:string; termId:string; termLabel:string; title:string;
+  officialYear:number|null; officialNumber:string|null; sourceNote:string;
+  hasScan:boolean; extractState:'NONE'|'EXTRACTED'|'UNREADABLE'; revision:number;
+  snippet?:string|null;
+}
+export interface HistoricalOrdinanceDetail extends HistoricalOrdinance {
+  extractedText:string|null; extractNote:string|null; scanMime:string|null;
+}
 export const libraryQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
@@ -178,8 +257,19 @@ export interface ReportSnapshot {
 export interface SessionView { user: { id: string; displayName: string; municipalityId: string }; permissions: Permission[]; csrfToken: string; }
 export interface Page<T> { items: T[]; pageInfo: {page: number; limit: number; total: number}; }
 export interface Municipality { id: string; name: string; province: string; code: string; timezone: string; revision: number; }
-export interface Term {id: string; label: string; startsOn: string; endsOn: string; revision: number;}
-export interface Person {id: string; displayName: string;}
+export interface Term {id: string; label: string; startsOn: string; endsOn: string; revision: number; peopleCount?: number;}
+export interface Person {id: string; displayName: string; positionCode: string; hasPhoto: boolean; photoVersion?:string|null; termId?: string; termLabel?: string; revision?: number;}
+export interface PersonLegislativeSeat {
+  termId:string; termLabel:string; startsOn:string; endsOn:string; positionCode:string;
+  authored:number; coAuthored:number;
+  committees:Array<{name:string; role:string; active:boolean}>;
+}
+export interface PersonLegislativeProfile {
+  id:string; displayName:string; positionCode:string; hasPhoto:boolean; photoVersion?:string|null;
+  termsListed:number; authored:number; coAuthored:number;
+  seats:PersonLegislativeSeat[];
+  note:string;
+}
 export interface Committee {id:string; code:string; name:string; termId:string; revision:number; term?:Term; members?:CommitteeMember[];}
 export interface CommitteeMember {id:string; personId:string; role:string; startsOn:string; endsOn:string; person?:Person;}
 export interface User {id:string; displayName:string; subject:string; enabled:boolean; revision:number;}
@@ -207,3 +297,48 @@ export interface DocumentRecord {id:string; title:string; classification:string;
 export interface WorkTask {id:string; ownerType:string; ownerId:string; measureId?:string|null; title:string; state:string; assigneeId:string|null; revision:number;}
 export interface NoticeItem {id:string; summary:string; readAt:string|null; createdAt:string;}
 export interface Problem {status:number; code:string; detail:string; correlationId:string; errors?:unknown;}
+export interface PublicMunicipality {name:string; province:string; code:string;}
+export interface PublicTerm {id?:string; label:string; startsOn:string; endsOn:string;}
+export interface PublicPerson {
+  id:string; displayName:string; positionCode:string; hasPhoto:boolean; photoVersion?:string|null;
+  assignments?:Array<{committeeName:string; role:string}>;
+}
+export interface PublicMeasure {
+  id:string; typeCode:string; title:string;
+  officialSeries:string|null; officialYear:number|null; officialNumber:number|null;
+  createdAt:string;
+}
+export interface PublicHome {
+  municipality:PublicMunicipality;
+  term:PublicTerm|null;
+  stats:{measures:number; people:number; committees:number; sessions:number};
+  recentMeasures:PublicMeasure[];
+  officers:{mayor:PublicPerson|null; viceMayor:PublicPerson|null; secretary:PublicPerson|null};
+  note:string;
+}
+export interface PublicCouncilSeat {
+  termId:string; termLabel:string; startsOn:string; endsOn:string; positionCode:string;
+  authored:number; coAuthored:number;
+  committees:Array<{name:string; role:string}>;
+}
+export interface PublicPersonProfile {
+  id:string; displayName:string; positionCode:string; hasPhoto:boolean; photoVersion?:string|null;
+  termsListed:number; authored:number; coAuthored:number;
+  seats:PublicCouncilSeat[];
+  note:string;
+}
+export interface PublicCouncil {
+  municipality:PublicMunicipality;
+  terms:Array<PublicTerm & {id:string}>;
+  term:(PublicTerm & {id:string})|null;
+  mayor:PublicPerson|null;
+  presiding:PublicPerson|null;
+  members:PublicPerson[];
+  liga:PublicPerson|null;
+  sk:PublicPerson|null;
+  secretary:PublicPerson|null;
+  staff:PublicPerson[];
+  other:PublicPerson[];
+  committees:Array<{id:string; code:string; name:string; members:Array<{role:string; person:PublicPerson}>}>;
+  note:string;
+}

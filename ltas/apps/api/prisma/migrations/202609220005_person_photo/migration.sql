@@ -1,0 +1,3 @@
+ALTER TABLE `persons` ADD COLUMN `photoMime` VARCHAR(40) NULL,
+    ADD COLUMN `photoSha256` CHAR(64) NULL,
+    ADD COLUMN `photoBytes` MEDIUMBLOB NULL;

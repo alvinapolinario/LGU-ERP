@@ -6,7 +6,7 @@ import { Commands } from './commands.js';
 import { assignedCommitteeIds, canMunicipality, measureVisibility, requireCommitteePermission, requirePermission } from './access.js';
 import { can } from './domain/policy.js';
 import { fail, type AuthRequest } from './http.js';
-import { scanBytes, validationStateFor } from './domain/scanner.js';
+import { readyVersionId, scanBytes, validationStateFor } from './domain/scanner.js';
 import { detectMime } from './domain/mime.js';
 
 const maxBytes=25*1024*1024;
@@ -97,11 +97,13 @@ export class DocumentsService {
       const sha256=createHash('sha256').update(bytes).digest('hex');
       const verdict=scanBytes(bytes);
       const documentId=randomUUID();
-      const version=await tx.document.create({data:{id:documentId,municipalityId:r.principal.municipalityId,ownerType:session.ownerType,ownerId:session.ownerId,measureId:session.ownerType==='MEASURE'?session.ownerId:null,title:session.originalFilename,classification:'INTERNAL'}}).then(async doc=>{
-        return tx.documentVersion.create({data:{id:randomUUID(),documentId:doc.id,sequence:1,bucket:this.ctx.config.MINIO_BUCKET_QUARANTINE,objectKey:session.quarantineKey,sha256,bytes:bytes.length,detectedMime:session.declaredMime,originalFilename:session.originalFilename,uploadedBy:r.principal.id,validationState:validationStateFor(verdict),scanVerdict:verdict}});
+      const versionId=randomUUID();
+      const currentReadyVersionId=readyVersionId(verdict,versionId);
+      const version=await tx.document.create({data:{id:documentId,municipalityId:r.principal.municipalityId,ownerType:session.ownerType,ownerId:session.ownerId,measureId:session.ownerType==='MEASURE'?session.ownerId:null,title:session.originalFilename,classification:'INTERNAL',currentReadyVersionId}}).then(async doc=>{
+        return tx.documentVersion.create({data:{id:versionId,documentId:doc.id,sequence:1,bucket:this.ctx.config.MINIO_BUCKET_QUARANTINE,objectKey:session.quarantineKey,sha256,bytes:bytes.length,detectedMime:session.declaredMime,originalFilename:session.originalFilename,uploadedBy:r.principal.id,validationState:validationStateFor(verdict),scanVerdict:verdict}});
       });
       await tx.uploadSession.update({where:{id},data:{status:'FINALIZED'}});
-      return {entityId:documentId,result:{id:documentId,title:session.originalFilename,classification:'INTERNAL',currentReadyVersionId:null,latestState:version.validationState,scanVerdict:version.scanVerdict},changes:{documentId,scanVerdict:verdict,reason}};
+      return {entityId:documentId,result:{id:documentId,title:session.originalFilename,classification:'INTERNAL',currentReadyVersionId,latestState:version.validationState,scanVerdict:version.scanVerdict},changes:{documentId,scanVerdict:verdict,currentReadyVersionId,reason}};
     },this.documentCommittee(r,'document.upload'))};
   }
   async get(r:AuthRequest,rawId:string) {
@@ -121,7 +123,7 @@ export class DocumentsService {
     if(!row) fail(404,'NOT_FOUND','Document not found.');
     if(row.measureId && !await this.ctx.db.legislativeMeasure.findFirst({where:{id:row.measureId,...this.visibleMeasure(r)}})) fail(404,'NOT_FOUND','Document not found.');
     if(row.ownerType!=='MEASURE') await this.assertOwner(r,row.ownerType,row.ownerId);
-    const ready=row.versions.find(v=>v.validationState==='READY');
+    const ready=row.currentReadyVersionId ? row.versions.find(v=>v.id===row.currentReadyVersionId && v.validationState==='READY') : undefined;
     if(!ready) fail(422,'DOCUMENT_NOT_READY','Quarantined files cannot be downloaded until an approved scanner marks them ready (D-13).');
     const bytes=await this.ctx.store.get(ready.bucket,ready.objectKey);
     return new StreamableFile(bytes,{type:ready.detectedMime,disposition:`attachment; filename="${ready.originalFilename.replaceAll('"','')}"`});

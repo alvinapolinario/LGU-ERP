@@ -31,6 +31,10 @@ import { SessionsController } from './sessions.js';
 import { SessionsService } from './sessions.service.js';
 import { LibraryController } from './library.js';
 import { LibraryService } from './library.service.js';
+import { PublicCatalogController } from './public-catalog.js';
+import { PublicCatalogService } from './public-catalog.service.js';
+import { ArchivesController } from './archives.js';
+import { ArchivesService } from './archives.service.js';
 
 export async function bootstrap():Promise<void> {
   const config=readConfig();
@@ -40,7 +44,7 @@ export async function bootstrap():Promise<void> {
   const store=await createObjectStore(config);
   await Promise.all([db.$connect(),redis.connect()]);
   const ctx:AppContext={db,redis,config,store};
-  @Module({controllers:[AuthController,AdministrationController,HealthController,MeasuresController,DocumentsController,ReferralsController,MeetingsController,SessionsController,LibraryController],providers:[{provide:CONTEXT,useValue:ctx},Commands,AdministrationService,MeasuresService,DocumentsService,ReferralsService,MeetingsService,SessionsService,LibraryService,SessionGuard]})
+  @Module({controllers:[AuthController,AdministrationController,HealthController,MeasuresController,DocumentsController,ReferralsController,MeetingsController,SessionsController,LibraryController,PublicCatalogController,ArchivesController],providers:[{provide:CONTEXT,useValue:ctx},Commands,AdministrationService,MeasuresService,DocumentsService,ReferralsService,MeetingsService,SessionsService,LibraryService,PublicCatalogService,ArchivesService,SessionGuard]})
   class AppModule {}
   const app=await NestFactory.create<NestExpressApplication>(AppModule,{logger:['error','warn','log'],bodyParser:false});
   app.set('trust proxy',config.NODE_ENV==='production'?1:false);
@@ -50,6 +54,12 @@ export async function bootstrap():Promise<void> {
     const path=(req.originalUrl??req.url).split('?')[0]??'';
     if(req.method==='PUT' && /\/api\/v1\/documents\/intents\/[^/]+\/content$/.test(path)) {
       return express.raw({type:()=>true,limit:26*1024*1024})(req,res,next);
+    }
+    if(req.method==='PUT' && /\/api\/v1\/admin\/persons\/[^/]+\/photo$/.test(path)) {
+      return express.raw({type:()=>true,limit:3*1024*1024})(req,res,next);
+    }
+    if(req.method==='PUT' && /\/api\/v1\/archives\/ordinances\/[^/]+\/scan$/.test(path)) {
+      return express.raw({type:()=>true,limit:13*1024*1024})(req,res,next);
     }
     return express.json({limit:'1mb'})(req,res,next);
   });

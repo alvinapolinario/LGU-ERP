@@ -50,7 +50,7 @@ describe.skipIf(!live)('T-FR-MEASURE MySQL 8.4 gates',{timeout:30000},()=>{
     await migrator.$transaction(async tx=>{
       await tx.municipality.create({data:{id:municipalityId,code,name:'Measure Test Municipality (Fictional)',province:'Demonstration'}});
       await tx.councilTerm.create({data:{id:termId,municipalityId,label:'Measure term',startsOn:new Date('2025-07-01'),endsOn:new Date('2028-06-30')}});
-      await tx.person.create({data:{id:personId,municipalityId,displayName:'Taylor Mendoza'}});
+      await tx.person.create({data:{id:personId,municipalityId,termId,displayName:'Taylor Mendoza'}});
       for(const [id,name] of [[sysId,'Sys Gate'],[secId,'Secretary Gate'],[lsId,'Staff Gate']] as const) {
         await tx.user.create({data:{id,municipalityId,issuer,subject:id,displayName:name}});
       }
@@ -149,6 +149,7 @@ describe.skipIf(!live)('T-FR-MEASURE MySQL 8.4 gates',{timeout:30000},()=>{
     const finalized=await documents.finalize(await actor(lsId),intent.data.id,{reason});
     expect(finalized.data.latestState).toBe('QUARANTINED');
     expect(finalized.data.scanVerdict).toBe('UNKNOWN');
+    expect(finalized.data.currentReadyVersionId).toBeNull();
     await expect(documents.download(await actor(lsId),finalized.data.id)).rejects.toMatchObject({status:422});
   });
 });

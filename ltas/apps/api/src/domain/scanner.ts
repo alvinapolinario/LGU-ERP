@@ -5,3 +5,6 @@ export function scanBytes(_body:Buffer):ScanVerdict {
 export function validationStateFor(verdict:ScanVerdict):'READY'|'QUARANTINED' {
   return verdict==='CLEAN'?'READY':'QUARANTINED';
 }
+export function readyVersionId(verdict:ScanVerdict, versionId:string):string|null {
+  return validationStateFor(verdict)==='READY' ? versionId : null;
+}

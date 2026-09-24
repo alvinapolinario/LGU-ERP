@@ -108,7 +108,7 @@ export class LibraryService {
       {key:'attendance.absent',label:'Recorded absent rows',value:absent,definition:'Session attendance rows marked ABSENT.'},
       {key:'attendance.excused',label:'Recorded excused rows',value:excused,definition:'Session attendance rows marked EXCUSED.'},
       {key:'votes.recorded',label:'Recorded tallies',value:votes,definition:'Secretary-entered session tallies. Result is always RECORDED and does not pass or fail a measure.'},
-      {key:'documents.quarantined',label:'Visible documents',value:documents,definition:'Case files the caller can already see. Uploads stay quarantined (D-13). Not the official archive.'},
+      {key:'documents.quarantined',label:'Quarantined documents',value:documents,definition:'Case files the caller can already see. Uploads stay quarantined (D-13). Not the official archive.'},
     ];
     return {data:{definitionVersion:REPORT_DEFINITION,asOf:new Date().toISOString(),timezone:'Asia/Manila',warnings:[...warnings],metrics}};
   }

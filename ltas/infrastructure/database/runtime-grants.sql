@@ -1,11 +1,14 @@
--- Apply as MySQL root after migrations. No database-wide runtime grant.
+-- Apply as MySQL root after migrations. Local Compose does this from npm run db:migrate.
+-- No database-wide runtime grant.
 GRANT SELECT, INSERT, UPDATE ON ltas.municipalities TO 'ltas_app'@'%';
 GRANT SELECT, INSERT, UPDATE ON ltas.users TO 'ltas_app'@'%';
 GRANT SELECT, INSERT, UPDATE ON ltas.grant_requests TO 'ltas_app'@'%';
 GRANT SELECT, INSERT ON ltas.user_roles TO 'ltas_app'@'%';
 GRANT UPDATE (revokedAt, revision) ON ltas.user_roles TO 'ltas_app'@'%';
 GRANT SELECT, INSERT ON ltas.council_terms TO 'ltas_app'@'%';
+GRANT UPDATE (label, startsOn, endsOn, revision) ON ltas.council_terms TO 'ltas_app'@'%';
 GRANT SELECT, INSERT ON ltas.persons TO 'ltas_app'@'%';
+GRANT UPDATE (displayName, positionCode, revision, photoMime, photoSha256, photoBytes) ON ltas.persons TO 'ltas_app'@'%';
 GRANT SELECT, INSERT, UPDATE ON ltas.committees TO 'ltas_app'@'%';
 GRANT SELECT, INSERT ON ltas.committee_members TO 'ltas_app'@'%';
 GRANT SELECT, INSERT ON ltas.audit_logs TO 'ltas_app'@'%';
@@ -14,6 +17,7 @@ GRANT SELECT, INSERT ON ltas.outbox_events TO 'ltas_app'@'%';
 GRANT SELECT, INSERT, UPDATE ON ltas.measure_types TO 'ltas_app'@'%';
 GRANT SELECT, INSERT, UPDATE ON ltas.legislative_measures TO 'ltas_app'@'%';
 GRANT SELECT, INSERT ON ltas.measure_authors TO 'ltas_app'@'%';
+GRANT UPDATE (displayName) ON ltas.measure_authors TO 'ltas_app'@'%';
 GRANT SELECT, INSERT, UPDATE ON ltas.measure_versions TO 'ltas_app'@'%';
 GRANT SELECT, INSERT ON ltas.measure_status_history TO 'ltas_app'@'%';
 GRANT SELECT, INSERT ON ltas.workflow_profiles TO 'ltas_app'@'%';
@@ -33,7 +37,7 @@ GRANT SELECT, INSERT, UPDATE ON ltas.legislative_sessions TO 'ltas_app'@'%';
 GRANT SELECT, INSERT ON ltas.session_agenda_items TO 'ltas_app'@'%';
 GRANT SELECT, INSERT, UPDATE ON ltas.session_attendance TO 'ltas_app'@'%';
 GRANT SELECT, INSERT, UPDATE ON ltas.session_votes TO 'ltas_app'@'%';
-GRANT SELECT, UPDATE ON ltas.outbox_events TO 'ltas_worker'@'%';
+GRANT SELECT, INSERT, UPDATE ON ltas.historical_ordinances TO 'ltas_app'@'%';
 GRANT SELECT, INSERT ON ltas.idempotency_records TO 'ltas_app'@'%';
 GRANT SELECT, UPDATE ON ltas.outbox_events TO 'ltas_worker'@'%';
 GRANT SELECT, INSERT, UPDATE ON ltas.consumer_receipts TO 'ltas_worker'@'%';

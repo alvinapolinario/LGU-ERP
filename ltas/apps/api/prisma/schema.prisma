@@ -30,6 +30,7 @@ model Municipality {
   referrals CommitteeReferral[]
   meetings CommitteeMeeting[]
   sessions LegislativeSession[]
+  historicalOrdinances HistoricalOrdinance[]
   @@map("municipalities")
 }
 model User {
@@ -100,6 +101,8 @@ model CouncilTerm {
   committees Committee[]
   measures LegislativeMeasure[]
   sessions LegislativeSession[]
+  people Person[]
+  historicalOrdinances HistoricalOrdinance[]
   @@unique([municipalityId,label])
   @@unique([id,municipalityId])
   @@map("council_terms")
@@ -108,13 +111,22 @@ model Person {
   id String @id @db.Char(36)
   municipalityId String @db.Char(36)
   municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  termId String @db.Char(36)
+  term CouncilTerm @relation(fields:[termId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
   displayName String @db.VarChar(160)
+  positionCode String @default("OTHER") @db.VarChar(32)
+  revision Int @default(1)
+  photoMime String? @db.VarChar(40)
+  photoSha256 String? @db.Char(64)
+  photoBytes Bytes? @db.MediumBlob
   createdAt DateTime @default(now()) @db.DateTime(3)
   members CommitteeMember[]
   attributions MeasureAuthor[]
   sessionAttendance SessionAttendance[]
   @@unique([id,municipalityId])
   @@index([municipalityId,displayName])
+  @@index([municipalityId,positionCode])
+  @@index([municipalityId,termId])
   @@map("persons")
 }
 model Committee {
@@ -563,4 +575,27 @@ model SessionVote {
   createdAt DateTime @default(now()) @db.DateTime(3)
   @@unique([sessionId,measureId])
   @@map("session_votes")
+}
+model HistoricalOrdinance {
+  id String @id @db.Char(36)
+  municipalityId String @db.Char(36)
+  municipality Municipality @relation(fields:[municipalityId], references:[id], onDelete:Restrict)
+  termId String @db.Char(36)
+  term CouncilTerm @relation(fields:[termId,municipalityId], references:[id,municipalityId], onDelete:Restrict)
+  title String @db.VarChar(240)
+  officialYear Int?
+  officialNumber String? @db.VarChar(40)
+  sourceNote String @db.VarChar(500)
+  scanMime String? @db.VarChar(40)
+  scanSha256 String? @db.Char(64)
+  scanFilename String? @db.VarChar(200)
+  scanBytes Bytes? @db.MediumBlob
+  extractedText String? @db.Text
+  extractState String @default("NONE") @db.VarChar(20)
+  extractNote String? @db.VarChar(240)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
+  @@index([municipalityId,termId])
+  @@map("historical_ordinances")
 }

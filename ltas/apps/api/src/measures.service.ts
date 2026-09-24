@@ -69,8 +69,11 @@ export class MeasuresService {
       const type=await tx.measureType.findUnique({where:{municipalityId_code:{municipalityId:r.principal.municipalityId,code:input.typeCode}}});
       const term=await tx.councilTerm.findFirst({where:{id:input.termId,...this.scope(r)}});
       if(!type || !term) fail(404,'NOT_FOUND','Measure type or council term not found.');
+      if(await tx.person.count({where:{termId:input.termId,municipalityId:r.principal.municipalityId}})==0) fail(422,'TERM_WITHOUT_COUNCIL','Encode the people of this council term before using it.');
+      if(new Set(input.authors.map(author=>author.personId)).size!==input.authors.length) fail(422,'DUPLICATE_AUTHOR','Each person can be listed once on a draft.');
       const people=await tx.person.findMany({where:{municipalityId:r.principal.municipalityId,id:{in:input.authors.map(a=>a.personId)}}});
       if(people.length!==new Set(input.authors.map(a=>a.personId)).size) fail(404,'NOT_FOUND','Author person not found.');
+      if(people.some(person=>person.termId!==input.termId)) fail(422,'TERM_MISMATCH','Authors must be people encoded on this council term.');
       const byId=new Map(people.map(p=>[p.id,p]));
       const id=randomUUID();
       const versionId=randomUUID();

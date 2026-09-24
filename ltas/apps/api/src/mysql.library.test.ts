@@ -43,7 +43,7 @@ describe.skipIf(!live)('T-FR-LIBRARY-001 / T-FR-REPORT-001 MySQL 8.4 library gat
     await migrator.$transaction(async tx=>{
       await tx.municipality.create({data:{id:municipalityId,code,name:'Library Test Municipality (Fictional)',province:'Demonstration'}});
       await tx.councilTerm.create({data:{id:termId,municipalityId,label:'Library term',startsOn:new Date('2025-07-01'),endsOn:new Date('2028-06-30')}});
-      await tx.person.create({data:{id:personId,municipalityId,displayName:'Taylor Mendoza'}});
+      await tx.person.create({data:{id:personId,municipalityId,termId,displayName:'Taylor Mendoza'}});
       await tx.committee.create({data:{id:committeeId,municipalityId,termId,code:'GOOD-GOV',name:'Committee on Good Governance'}});
       for(const [id,name] of [[sysId,'Sys Gate'],[secId,'Secretary Gate'],[lsId,'Staff Gate'],[csId,'Committee Gate']] as const) {
         await tx.user.create({data:{id,municipalityId,issuer,subject:id,displayName:name}});

@@ -29,7 +29,7 @@ Audit/retention codes in every table:
 | role_permissions — bundle membership | role, permission, grant/revoke revision, active flag | U(role, permission, revision); I(role, active) | H revisions retained |
 | user_permission_grants — approved exceptions | user, permission, allow/deny, scope, interval, approver, reason | U(user, permission, scope_key, effective_from); I(user, effective_to) | H; revocation event |
 | council_terms — term context | municipality, label, start_date, end_date | U(municipality, label); I(start_date, end_date) | M; freeze referenced dates via reviewed correction |
-| persons — historical people independent of login | public name, minimal private contact fields, linked_user nullable | I(municipality, normalized_name); no unique name | M; referenced name history retained |
+| persons — historical people independent of login | public name, directory position label, optional directory photograph (mime/sha256/bytes), linked_user nullable | I(municipality, normalized_name); no unique name | M; referenced name history retained; photograph bytes are not listed on person APIs |
 | council_memberships — office/seat history | person, council_term, seat_code, office_type, effective interval, authority evidence | U(term, seat_code, effective_from); I(person, interval) | H; prevent overlapping active seat intervals in transaction |
 | system_settings — versioned nonsecret configuration | municipality, key, version, validated value, approval, effective dates | U(municipality, key, version); I(key, effective_from) | H approved versions; no secrets |
 | number_sequences — official numbering | municipality, series, type, year/term scope, next_value | U(municipality, series, scope_key) | M; every allocation audited; row lock |

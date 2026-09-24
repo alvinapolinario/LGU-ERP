@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { SessionGuard } from './access.js';
 import type { AuthRequest } from './http.js';
 import { AdministrationService } from './administration.service.js';
@@ -18,6 +18,8 @@ export class AdministrationController {
   createUser(@Req() r:AuthRequest,@Body() body:unknown) {return this.service.createUser(r, body);}
   @Patch('admin/users/:id/state')
   userState(@Req() r:AuthRequest,@Param('id') rawId:string,@Body() body:unknown) {return this.service.userState(r, rawId, body);}
+  @Get('admin/grant-committees')
+  grantCommittees(@Req() r:AuthRequest) {return this.service.grantCommittees(r);}
   @Get('admin/grant-requests')
   requests(@Req() r:AuthRequest,@Query() q:unknown) {return this.service.requests(r, q);}
   @Post('admin/grant-requests')
@@ -32,10 +34,24 @@ export class AdministrationController {
   terms(@Req() r:AuthRequest,@Query() q:unknown) {return this.service.terms(r, q);}
   @Post('admin/terms')
   createTerm(@Req() r:AuthRequest,@Body() body:unknown) {return this.service.createTerm(r, body);}
+  @Patch('admin/terms/:id')
+  editTerm(@Req() r:AuthRequest,@Param('id') rawId:string,@Body() body:unknown) {return this.service.editTerm(r, rawId, body);}
   @Get('admin/persons')
   persons(@Req() r:AuthRequest,@Query() q:unknown) {return this.service.persons(r, q);}
   @Post('admin/persons')
   createPerson(@Req() r:AuthRequest,@Body() body:unknown) {return this.service.createPerson(r, body);}
+  @Patch('admin/persons/:id')
+  editPerson(@Req() r:AuthRequest,@Param('id') rawId:string,@Body() body:unknown) {return this.service.editPerson(r, rawId, body);}
+  @Put('admin/persons/:id/photo')
+  setPhoto(@Req() r:AuthRequest,@Param('id') rawId:string) {
+    const raw=r.body;
+    const buffer=Buffer.isBuffer(raw)?raw:Buffer.from(typeof raw==='string'?raw:'');
+    return this.service.setPhoto(r, rawId, buffer);
+  }
+  @Get('admin/persons/:id/photo')
+  photo(@Req() r:AuthRequest,@Param('id') rawId:string) {return this.service.photo(r, rawId);}
+  @Get('admin/persons/:id/profile')
+  personProfile(@Req() r:AuthRequest,@Param('id') rawId:string) {return this.service.personProfile(r, rawId);}
   @Get('committees')
   committees(@Req() r:AuthRequest,@Query() q:unknown) {return this.service.committees(r, q);}
   @Get('committees/:id')

@@ -1,6 +1,8 @@
 # 15 — Public legislative transparency portal
 
-Proposed public host: `legislative.municipality.gov.ph`; internal host: `ltas.municipality.gov.ph`. These are illustrative, not registered or deployed domains. The portal has a separate React build, navigation and public API surface. Anonymous browsing does not require a Keycloak session.
+Proposed public host: `legislative.municipality.gov.ph`; internal host: `ltas.municipality.gov.ph`. These are illustrative, not registered or deployed domains. The official Phase 9 portal has a separate React build, reviewed release snapshots, and a dedicated public API. Anonymous browsing does not require a Keycloak session.
+
+A constrained demonstration catalog now exists on the staff web origin at `/home`, `/track`, `/council`, `/ordinances`, `/resolutions`, `/about`, and `/contact`, reading live LTAS rows through `GET /public/*`. Public measure routes list submitted titles only. Draft and withdrawn case files, subjects, stages, authors, and referral dispositions are not included. Chrome follows the Philippine Government Website Template (GWT 26) used on libungan.gov.ph. It is not this document's approved-release model, not a replacement of the official municipal website, not DICT GWHS hosting, and not D-08 sign-off. See ADR-22 and ADR-23.
 
 ## Public experience
 

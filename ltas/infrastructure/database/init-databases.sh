@@ -16,3 +16,5 @@ CREATE USER 'keycloak'@'%' IDENTIFIED BY '$KEYCLOAK_DB_PASSWORD';
 GRANT ALL PRIVILEGES ON ltas.* TO 'ltas_migrator'@'%';
 GRANT ALL PRIVILEGES ON keycloak.* TO 'keycloak'@'%';
 SQL
+# ltas_app and ltas_worker receive table grants only after migrations,
+# from scripts/apply-runtime-grants.mjs (npm run db:migrate).

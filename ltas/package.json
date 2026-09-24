@@ -20,9 +20,10 @@
     "dev:api": "npm run dev -w @ltas/api",
     "dev:web": "npm run dev -w @ltas/web",
     "db:generate": "npm run db:generate -w @ltas/api",
-    "db:migrate": "npm run db:migrate -w @ltas/api",
+    "db:migrate": "npm run db:migrate -w @ltas/api && npm run db:grants",
+    "db:grants": "node --env-file=.env scripts/apply-runtime-grants.mjs",
     "db:seed": "npm run db:seed -w @ltas/api",
-    "check": "npm run db:generate && npm run typecheck && npm test && npm run build"
+    "check": "npm run db:generate && npm run typecheck && npm test && npm run test:mysql && npm run build"
   },
   "overrides": {
     "mariadb": "3.5.4",

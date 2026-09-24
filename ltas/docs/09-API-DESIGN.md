@@ -21,7 +21,7 @@ This is a contract plan, not implemented endpoints. Base internal route is `/api
 | `/effectivity` | Candidate assessment and authorized confirmations | effectivity.confirm, required authority and evidence |
 | `/library` | Search/filter authorized archives, retrieve accession and versions | Scope applied before matching/counts/snippets |
 | `/codification` | Relationships and reviewed legal-status assessments | codification/relationship authority; no generated legal text mutation |
-| `/archives` | Accession, custody, completeness and hold management | archive.manage plus records authority |
+| `/archives` | Accession, custody, completeness and hold management. A constrained register now exists at `/archives/ordinances` (encode, correct, attach a scan, search recognized text). That register is not `archive.manage` and does not certify the copy | archive.view / archive.encode for the register; archive.manage remains the later accession authority |
 | `/imports` | Stage, preview, validate, approve and reconcile historical batches | import.manage; idempotent source keys and provenance |
 | `/implementation-reviews` | Responsible office, follow-up findings and evidence | Assigned review permission; no status side effects |
 | `/dashboard` | Scoped aggregate summaries and quick-action eligibility | Query visibility matches source modules |

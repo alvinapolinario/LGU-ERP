@@ -1,9 +1,9 @@
 # Legislative Tracking and Analysis System (LTAS)
 
-**Status: PHASE 1–4 IMPLEMENTATION** — platform foundation through constrained sessions, calendar, secretary-entered roll-call, and document list.  
-Official numbering, IRP, malware scanning, MFA, readings, hearings, committee reports, certified votes, and the public portal are not in this slice.
+**Status: PHASE 1–4 IMPLEMENTATION, plus a constrained library and report catalog, a demonstration public catalog, and a historical ordinance register.** Platform foundation through constrained sessions, calendar, secretary-entered roll-call, and the document list are in the tree. So are a permission-filtered e-Library, descriptive counts, the catalog at `/home`, `/track`, and `/council`, and a prior-term ordinance register with keyword search on saved scan text.  
+Official numbering, IRP, malware scanning, MFA, readings, hearings, committee reports, certified votes, the official archive, official metrics, and the Phase 9 approved-release portal are not in this slice.
 
-LTAS is a Municipal Legislative Management Platform for a Philippine municipality and its Sangguniang Bayan. Each legislative measure is a digital case file. Phase 1 ships identity, scoped access, municipal structure, committee roster, and attributable audit. Phase 2 adds draft case files, versions, in-app tasks, and quarantined uploads. Phase 3 adds lead/joint referrals, committee-scoped measure visibility, secretariat-recorded meetings, and committee/meeting quarantine uploads.
+LTAS is a Municipal Legislative Management Platform for a Philippine municipality and its Sangguniang Bayan. Each legislative measure is a digital case file. Phase 1 ships identity, scoped access, municipal structure, committee roster, and attributable audit. Phase 2 adds draft case files, versions, in-app tasks, and quarantined uploads. Phase 3 adds lead/joint referrals, committee-scoped measure visibility, secretariat-recorded meetings, and committee/meeting quarantine uploads. Phase 4 adds secretariat-recorded sessions, a combined calendar, secretary-entered attendance and tallies, and a document list. The library, reports, demonstration catalog, and historical ordinance register are recorded in [34](docs/34-PHASE-7-LIBRARY-REPORTS.md), [15](docs/15-PUBLIC-PORTAL.md), and [35](docs/35-HISTORICAL-ORDINANCES.md).
 
 Implementation was authorized on 2026-09-21. This is not production, municipal policy approval, or Phase 1 acceptance. Open decisions remain in [26](docs/26-DECISIONS-AND-ASSUMPTIONS.md). How to run, what is in scope, and remaining gates are in [28 Phase 1 foundation](docs/28-PHASE-1-FOUNDATION.md).
 
@@ -17,7 +17,7 @@ Implementation was authorized on 2026-09-21. This is not production, municipal p
 
 ## Architecture and technology
 
-One NestJS modular monolith owns the transactional domain. React applications provide authenticated operations and a later separate public experience. MySQL is the primary transactional database; Prisma is the ORM. MinIO stores quarantined file bytes in Phase 2; MySQL stores metadata. Redis supports sessions and recoverable background work. Keycloak supplies identity. Public endpoints are not served in Phase 1.
+One NestJS modular monolith owns the transactional domain. The React app serves the authenticated workspace and the demonstration catalog. MySQL is the primary transactional database; Prisma is the ORM. MinIO stores quarantined case-file bytes; MySQL stores metadata and historical-ordinance scan bytes. Redis supports sessions and recoverable background work. Keycloak supplies identity. Anonymous reads are `GET /api/v1/public/*` for the demonstration catalog only. The separate Phase 9 `apps/public-portal/` package is not built.
 
 | Layer | Planned technology |
 |---|---|
@@ -32,27 +32,36 @@ One NestJS modular monolith owns the transactional domain. React applications pr
 
 Phase 1 uses React, Vite, TanStack Query, Lucide, Zod, NestJS, Prisma, MySQL, Redis, and Keycloak. Phase 2 adds MinIO for quarantined uploads. Tailwind, shadcn/ui, TanStack Table, React Hook Form, and Recharts remain for later UI work. Exact support arrangements and licensing review stay D-12. PostgreSQL and a microservices-first topology are outside this design.
 
-## Phase 1 modules
+## What is in the tree
 
-Municipality profile; council terms; historical people; committee roster; user linking; dual-control grants; hash-chained audit; outbox export; authenticated workspace.
+Phase 1: municipality profile, council terms, people, committee roster, user linking, dual-control grants, hash-chained audit, outbox export, and the authenticated workspace.
 
-Not in Phase 1: measures, workflow, documents, hearings, sessions, voting, post-approval, e-Library, reports, public portal.
+Later authorized slices, each in its own handoff:
+
+- Phase 2: draft case files, versions, in-app tasks, quarantined uploads
+- Phase 3: lead and joint referrals, secretariat-recorded committee meetings
+- Phase 4: sessions, calendar, secretary-entered attendance and tallies, document list
+- Phase 7/8 constrained slice: permission-filtered library and descriptive counts
+- Demonstration catalog at `/home`, `/track`, and `/council` (ADR-22). This is not an approved public release
+- Historical ordinance register (ADR-24). This is not an official archive or a legislative measure
+
+Still later: hearings, committee reports, certified voting, post-approval, codification, the official archive, official metrics, the Phase 9 approved-release portal, and production readiness.
 
 ## Repository structure
 
 | Directory | Responsibility |
 |---|---|
-| `apps/web/` | Authenticated municipal workspace |
+| `apps/web/` | Authenticated municipal workspace and the demonstration catalog at `/home`, `/track`, and `/council` |
 | `apps/api/` | Modular-monolith backend and same-codebase worker |
 | `packages/contracts/` | Shared Zod contracts and DTO types |
 | `infrastructure/docker/` | Compose definitions for MySQL, Redis, Keycloak; optional MinIO |
 | `infrastructure/nginx/` | Staging reverse-proxy example |
 | `infrastructure/database/` | Database bootstrap and runtime grants |
 | `infrastructure/backup/` | Recovery rehearsal procedure and redacted T-NFR-RECOVERY-001 evidence |
-| `docs/` | Authoritative numbered planning baseline plus Phase 1 handoff |
+| `docs/` | Authoritative numbered planning baseline plus phase handoffs through the ordinance register |
 | `scripts/` | Local env generation, Keycloak provisioning, audit verification, isolated restore |
 
-`apps/public-portal/` and additional shared packages are created when those phases are authorized.
+A constrained demonstration public catalog is served from `apps/web` at `/home`, `/track`, and `/council`. The official Phase 9 `apps/public-portal/` package, reviewed releases, and public downloads remain unauthorized.
 
 ## Reading order and document index
 
@@ -95,6 +104,7 @@ Start with overview, requirements, architecture, workflow, database, permissions
 | [32 Phase 3 meetings](docs/32-PHASE-3-MEETINGS.md) | Committee meetings and committee/meeting documents |
 | [33 Phase 4 sessions](docs/33-PHASE-4-SESSIONS.md) | Sessions, calendar, roll-call, and document list |
 | [34 Phase 7/8 library and reports](docs/34-PHASE-7-LIBRARY-REPORTS.md) | Permission-filtered e-Library and descriptive counts |
+| [35 Historical ordinances](docs/35-HISTORICAL-ORDINANCES.md) | Direct prior-term ordinance register and scan keyword search |
 | [Documentation index](docs/README.md) | Baseline maintenance and precedence |
 
 ## Development phases
@@ -103,4 +113,4 @@ Start with overview, requirements, architecture, workflow, database, permissions
 
 ## Next action
 
-Follow [28](docs/28-PHASE-1-FOUNDATION.md) to run the synthetic foundation locally. Phase 2–4 constrained slices and the library/report catalog are in [30](docs/30-PHASE-2-MEASURES.md), [31](docs/31-PHASE-3-REFERRALS.md), [32](docs/32-PHASE-3-MEETINGS.md), [33](docs/33-PHASE-4-SESSIONS.md), and [34](docs/34-PHASE-7-LIBRARY-REPORTS.md). D-03 is open as a working paper in [29](docs/29-D-03-ROLE-BUNDLES.md) (not yet signed). Remaining gates: D-03 confirmation, D-04 numbering, D-05/D-09/D-10/D-11/D-12/D-13/D-16. MySQL-backed access checks are `npm run test:mysql`. Isolated restore rehearsal is `LTAS_RESTORE_CONFIRM=ltas-restore-rehearsal npm run recovery -- rehearse`.
+Follow [28](docs/28-PHASE-1-FOUNDATION.md) to run the synthetic foundation locally. Phase 2–4 constrained slices, the library/report catalog, and the historical ordinance register are in [30](docs/30-PHASE-2-MEASURES.md), [31](docs/31-PHASE-3-REFERRALS.md), [32](docs/32-PHASE-3-MEETINGS.md), [33](docs/33-PHASE-4-SESSIONS.md), [34](docs/34-PHASE-7-LIBRARY-REPORTS.md), and [35](docs/35-HISTORICAL-ORDINANCES.md). The demonstration catalog is [15](docs/15-PUBLIC-PORTAL.md). D-03 is open as a working paper in [29](docs/29-D-03-ROLE-BUNDLES.md). Remaining gates: D-03 confirmation, D-04 numbering, D-05/D-09/D-10/D-11/D-12/D-13/D-16. MySQL-backed access checks are `npm run test:mysql`. Isolated restore rehearsal is `LTAS_RESTORE_CONFIRM=ltas-restore-rehearsal npm run recovery -- rehearse`.

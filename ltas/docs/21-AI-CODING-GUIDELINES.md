@@ -1,6 +1,6 @@
 # 21 — AI coding assistant guidelines
 
-Use this repository as development context for the **authorized Phase 1–4 constrained slices plus the Phase 7/8 library/report catalog** (foundation, measures, referrals/meetings, secretariat-recorded sessions/roll-call/document list, permission-filtered e-Library and descriptive counts). Do not implement remaining hearings/committee reports, certified votes, codification, official archive, official metrics, Phases 5–6/9–10, production deployment, or policy guesses from the presence of a roadmap. Municipal legal/authority choices remain TBD until the responsible stakeholder records them.
+Use this repository as development context for the **authorized Phase 1–4 constrained slices, the Phase 7/8 library/report catalog, the ADR-22 demonstration catalog, and the ADR-24 historical ordinance register** (foundation, measures, referrals/meetings, secretariat-recorded sessions/roll-call/document list, permission-filtered e-Library and descriptive counts, `/home` catalog, prior-term ordinance text search). Do not implement remaining hearings/committee reports, certified votes, codification, the official archive, official metrics, Phases 5–6, the Phase 9 approved-release portal, Phase 10 production deployment, or policy guesses from the presence of a roadmap. Municipal legal/authority choices remain TBD until the responsible stakeholder records them.
 
 ## Required context before a change
 

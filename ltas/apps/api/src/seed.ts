@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createDatabase, type Prisma } from './database.js';
 import { digest, genesisHash } from './domain/integrity.js';
 import { jsonValue } from './commands.js';
@@ -21,14 +24,20 @@ const identities=[
   {id:'40000000-0000-4000-8000-000000000006',name:'Riley Flores',username:'riley.staff',role:'LS'},
 ];
 const people=[
-  {id:'50000000-0000-4000-8000-000000000001',name:'Taylor Mendoza'},
-  {id:'50000000-0000-4000-8000-000000000002',name:'Jordan Villanueva'},
-  {id:'50000000-0000-4000-8000-000000000003',name:'Avery Ramos'},
-  {id:'50000000-0000-4000-8000-000000000004',name:'Quinn Navarro'},
-  {id:'50000000-0000-4000-8000-000000000005',name:'Hayden Cruz'},
-  {id:'50000000-0000-4000-8000-000000000006',name:'Cameron Dela Peña'},
-  {id:'50000000-0000-4000-8000-000000000007',name:'Reese Bautista'},
-  {id:'50000000-0000-4000-8000-000000000008',name:'Skyler Gonzales'},
+  {id:'50000000-0000-4000-8000-000000000001',name:'Taylor Mendoza',positionCode:'COUNCILOR'},
+  {id:'50000000-0000-4000-8000-000000000002',name:'Jordan Villanueva',positionCode:'COUNCILOR'},
+  {id:'50000000-0000-4000-8000-000000000003',name:'Avery Ramos',positionCode:'COUNCILOR'},
+  {id:'50000000-0000-4000-8000-000000000004',name:'Quinn Navarro',positionCode:'COUNCILOR'},
+  {id:'50000000-0000-4000-8000-000000000009',name:'Ellis Mercado',positionCode:'COUNCILOR'},
+  {id:'50000000-0000-4000-8000-000000000010',name:'Rowan Aquino',positionCode:'COUNCILOR'},
+  {id:'50000000-0000-4000-8000-000000000011',name:'Sage Del Rosario',positionCode:'COUNCILOR'},
+  {id:'50000000-0000-4000-8000-000000000012',name:'Parker Salazar',positionCode:'COUNCILOR'},
+  {id:'50000000-0000-4000-8000-000000000013',name:'Lane Gutierrez',positionCode:'LIGA_PRESIDENT'},
+  {id:'50000000-0000-4000-8000-000000000014',name:'Marlowe Ignacio',positionCode:'SK_PRESIDENT'},
+  {id:'50000000-0000-4000-8000-000000000005',name:'Hayden Cruz',positionCode:'VICE_MAYOR'},
+  {id:'50000000-0000-4000-8000-000000000006',name:'Cameron Dela Peña',positionCode:'SB_STAFF'},
+  {id:'50000000-0000-4000-8000-000000000007',name:'Reese Bautista',positionCode:'SB_SECRETARY'},
+  {id:'50000000-0000-4000-8000-000000000008',name:'Skyler Gonzales',positionCode:'MAYOR'},
 ];
 const committees=[
   {id:committeeId,code:'GOOD-GOV',name:'Committee on Good Governance'},
@@ -59,9 +68,16 @@ async function ensureRoster(tx:Prisma.TransactionClient) {
   const byName=new Map<string,string>();
   let added=false;
   for(const person of people) {
-    const existing=await tx.person.findFirst({where:{municipalityId,displayName:person.name}});
-    if(existing) {byName.set(person.name,existing.id); continue;}
-    await tx.person.create({data:{id:person.id,municipalityId,displayName:person.name}});
+    const existing=await tx.person.findFirst({where:{municipalityId,termId,displayName:person.name}});
+    if(existing) {
+      byName.set(person.name,existing.id);
+      if(existing.positionCode!==person.positionCode && (existing.id===person.id || existing.positionCode==='OTHER')) {
+        await tx.person.update({where:{id:existing.id},data:{positionCode:person.positionCode}});
+        added=true;
+      }
+      continue;
+    }
+    await tx.person.create({data:{id:person.id,municipalityId,termId,displayName:person.name,positionCode:person.positionCode}});
     byName.set(person.name,person.id);
     added=true;
   }
@@ -86,6 +102,38 @@ async function ensureRoster(tx:Prisma.TransactionClient) {
   return added;
 }
 
+const officialsFile = resolve(dirname(fileURLToPath(import.meta.url)), '../../web/public/libungan_municipal_officials_2013_2025.csv');
+
+function officialPosition(label:string) {
+  const value = label.trim().toLowerCase();
+  if (value === 'municipal mayor') return 'MAYOR';
+  if (value === 'municipal vice mayor') return 'VICE_MAYOR';
+  if (value === 'sb member') return 'COUNCILOR';
+  return null;
+}
+
+async function importOfficials(tx:Prisma.TransactionClient) {
+  const text = readFileSync(officialsFile, 'utf8');
+  const rows = text.split(/\r?\n/).slice(1).map(line => line.trim()).filter(Boolean);
+  const terms = await tx.councilTerm.findMany({where:{municipalityId}});
+  const added:Array<{term:string; name:string; positionCode:string}> = [];
+  const skipped:string[] = [];
+  const unmatched = new Set<string>();
+  for (const line of rows) {
+    const [span, position, name] = line.split(',').map(part => part.trim());
+    if (!span || !position || !name) continue;
+    const positionCode = officialPosition(position);
+    if (!positionCode || name.toUpperCase() === 'TBD') { skipped.push(`${span} ${position}`); continue; }
+    const term = terms.find(item => item.label.replaceAll('–', '-').includes(span));
+    if (!term) { unmatched.add(span); continue; }
+    const existing = await tx.person.findFirst({where:{municipalityId:term.municipalityId, termId:term.id, displayName:name}});
+    if (existing) continue;
+    await tx.person.create({data:{id:randomUUID(), municipalityId:term.municipalityId, termId:term.id, displayName:name, positionCode}});
+    added.push({term:term.label, name, positionCode});
+  }
+  return {added, skipped, unmatched:[...unmatched]};
+}
+
 try {
   const result=await db.$transaction(async tx=>{
     const ls=identities.find(identity=>identity.role==='LS')!;
@@ -97,8 +145,13 @@ try {
         addedLs=true;
       }
       const addedRoster=await ensureRoster(tx);
-      if(!addedLs && !addedRoster) throw new Error('Seed refused: the database is not empty. Existing data will not be overwritten.');
+      const officials=await importOfficials(tx);
+      if(!addedLs && !addedRoster && officials.added.length===0) throw new Error('Seed refused: the database is not empty. Existing data will not be overwritten.');
       if(addedRoster) await appendAudit(tx,'foundation.roster-seeded',municipalityId,{reason:'User-authorized fictional Sanggunian member names for committee assignment; not elected-office records',people:people.map(person=>person.name),committees:committees.map(committee=>committee.code)});
+      if(officials.added.length) await appendAudit(tx,'foundation.officials-imported',municipalityId,{reason:'Directory names from the user-supplied officials list, matched to existing council terms by year span. A position label is not a certified election result.',source:'libungan_municipal_officials_2013_2025.csv',people:officials.added,skipped:officials.skipped,unmatchedTerms:officials.unmatched});
+      if(officials.unmatched.length) throw new Error(`Officials list has council terms that are not in this installation: ${officials.unmatched.join(', ')}`);
+      if(officials.added.length || officials.skipped.length) console.log(JSON.stringify({imported:officials.added.length,skipped:officials.skipped,unmatchedTerms:officials.unmatched}));
+      if(officials.added.length && !addedLs && !addedRoster) return 'officials';
       return addedLs && addedRoster?'ls-roster':addedLs?'ls':'roster';
     }
     await tx.municipality.create({data:{id:municipalityId,code:'DEMO-001',name:'Municipality of San Isidro (Fictional)',province:'Demonstration Province'}});
@@ -115,6 +168,7 @@ try {
     foundation:'Fictional foundation seeded. Login accounts must be created through the local Keycloak setup script.',
     ls:'Added fictional legislative staff identity to the existing development municipality.',
     roster:'Added fictional people and committee roster to the existing development municipality.',
+    officials:'Added directory names from the officials list onto the matching council terms.',
     'ls-roster':'Added fictional legislative staff identity plus people and committee roster.',
   };
   console.log(messages[result]??'Fictional development records updated.');

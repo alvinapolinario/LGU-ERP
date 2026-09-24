@@ -49,7 +49,7 @@ describe.skipIf(!live)('T-FR-COMMITTEE-002 MySQL 8.4 referral gates',{timeout:30
       await tx.municipality.create({data:{id:municipalityId,code,name:'Referral Test Municipality (Fictional)',province:'Demonstration'}});
       await tx.councilTerm.create({data:{id:termId,municipalityId,label:'Referral term',startsOn:new Date('2025-07-01'),endsOn:new Date('2028-06-30')}});
       await tx.councilTerm.create({data:{id:otherTermId,municipalityId,label:'Prior term',startsOn:new Date('2022-07-01'),endsOn:new Date('2025-06-30')}});
-      await tx.person.create({data:{id:personId,municipalityId,displayName:'Taylor Mendoza'}});
+      await tx.person.create({data:{id:personId,municipalityId,termId,displayName:'Taylor Mendoza'}});
       await tx.committee.create({data:{id:leadId,municipalityId,termId,code:'GOOD-GOV',name:'Committee on Good Governance'}});
       await tx.committee.create({data:{id:jointId,municipalityId,termId,code:'WAYS-MEANS',name:'Committee on Ways and Means'}});
       await tx.committee.create({data:{id:otherTermCommitteeId,municipalityId,termId:otherTermId,code:'OLD-GOV',name:'Prior Term Committee'}});

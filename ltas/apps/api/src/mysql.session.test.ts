@@ -44,7 +44,7 @@ describe.skipIf(!live)('T-FR-SESSION-001 MySQL 8.4 session gates',{timeout:30000
     await migrator.$transaction(async tx=>{
       await tx.municipality.create({data:{id:municipalityId,code,name:'Session Test Municipality (Fictional)',province:'Demonstration'}});
       await tx.councilTerm.create({data:{id:termId,municipalityId,label:'Session term',startsOn:new Date('2025-07-01'),endsOn:new Date('2028-06-30')}});
-      await tx.person.create({data:{id:personId,municipalityId,displayName:'Taylor Mendoza'}});
+      await tx.person.create({data:{id:personId,municipalityId,termId,displayName:'Taylor Mendoza'}});
       await tx.committee.create({data:{id:committeeId,municipalityId,termId,code:'GOOD-GOV',name:'Committee on Good Governance'}});
       for(const [id,name] of [[sysId,'Sys Gate'],[secId,'Secretary Gate'],[lsId,'Staff Gate'],[csId,'Committee Gate']] as const) {
         await tx.user.create({data:{id,municipalityId,issuer,subject:id,displayName:name}});
@@ -121,6 +121,7 @@ describe.skipIf(!live)('T-FR-SESSION-001 MySQL 8.4 session gates',{timeout:30000
     await documents.storeContent(await actor(secId),intent.data.id,Buffer.from('%PDF-1.4 fixture'));
     const file=await documents.finalize(await actor(secId),intent.data.id,{reason});
     expect(file.data.latestState).toBe('QUARANTINED');
+    expect(file.data.currentReadyVersionId).toBeNull();
     const calendar=await sessions.calendar(await actor(secId),{page:1,limit:25});
     expect(calendar.items.some(item=>item.kind==='SESSION' && item.reference==='S-2026-1')).toBe(true);
   });
