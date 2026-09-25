@@ -4,7 +4,8 @@ server {
     server_name ltas.example.invalid;
     ssl_certificate /etc/ltas/tls/fullchain.pem;
     ssl_certificate_key /etc/ltas/tls/privkey.pem;
-    client_max_body_size 256k;
+    # API still rejects case files over 25 MiB and historical scans over 12 MiB.
+    client_max_body_size 26m;
     root /srv/ltas/apps/web/dist;
     add_header X-Content-Type-Options nosniff always;
     location /api/v1/health/live {

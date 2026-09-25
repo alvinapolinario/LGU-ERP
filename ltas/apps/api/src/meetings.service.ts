@@ -103,6 +103,7 @@ export class MeetingsService {
     for(const [index,referralId] of referralIds.entries()) {
       const referral=await tx.committeeReferral.findFirst({where:{id:referralId,...this.scope(r)}});
       if(!referral || referral.committeeId!==committeeId) fail(404,'NOT_FOUND','Referral not found for this committee.');
+      if(referral.disposition!=='OPEN') fail(422,'REFERRAL_CLOSED','A closed referral cannot be placed on a meeting agenda.');
       if(await tx.meetingReferral.findFirst({where:{meetingId,referralId}})) fail(409,'CONFLICT','This referral is already on the meeting agenda.');
       await tx.meetingReferral.create({data:{id:randomUUID(),municipalityId:r.principal.municipalityId,meetingId,referralId,measureVersionId:referral.measureVersionId,sequence:start+index+1}});
     }

@@ -965,12 +965,14 @@ function Accounts({session}:{session:SessionView}) {
 function AccessPage({session}:{session:SessionView}) {
   const users = useQuery({queryKey:['/admin/users','options'], queryFn:() => request<Page<User>>('/admin/users?limit=100')});
   const [role, setRole] = useState('SEC');
+  const [acting, setActing] = useState(false);
   const committees = useQuery({queryKey:['/admin/grant-committees'], queryFn:() => request<{items:Array<{id:string; name:string; code:string; termLabel:string}>}>('/admin/grant-committees'), enabled:role === 'CS'});
   return <>
     <div className="notice"><ShieldCheck size={20}/><span>Access grants require two administrators. Requester, reviewer, and recipient must be different people.</span></div>
     <AddPanel label="Request access grant">
       <label className="role-select">Role<select value={role} onChange={event => setRole(event.target.value)}>{['SYS','SEC','AUD','CS','LS'].map(item => <option key={item}>{item}</option>)}</select></label>
-      {users.isError ? <Notice error={users.error}/> : committees.isError ? <Notice error={committees.error}/> : <CommandForm key={role} title="Access request" path="/admin/grant-requests" csrf={session.csrfToken} fixed={{role, scopeType:role === 'CS' ? 'COMMITTEE' : 'MUNICIPALITY', ...(role !== 'CS' ? {scopeId:session.user.municipalityId} : {})}} transform={body => ({...body, validFrom:new Date(String(body['validFrom'])).toISOString(), validUntil:new Date(String(body['validUntil'])).toISOString()})} fields={[{name:'userId', label:'Recipient', options:users.data?.items.filter(user => user.enabled && user.id !== session.user.id).map(user => ({value:user.id, label:user.displayName})) ?? []}, ...(role === 'CS' ? [{name:'scopeId', label:'Committee', options:(committees.data?.items ?? []).map(item => ({value:item.id, label:`${item.name} · ${item.termLabel}`}))}] : []), {name:'validFrom', label:'Valid from (your local time)', type:'datetime-local'}, {name:'validUntil', label:'Expires (your local time)', type:'datetime-local'}]}/>}
+      <label className="role-select"><input type="checkbox" checked={acting} onChange={event => setActing(event.target.checked)}/> Acting or emergency grant, at most 24 hours</label>
+      {users.isError ? <Notice error={users.error}/> : committees.isError ? <Notice error={committees.error}/> : <CommandForm key={`${role}-${acting}`} title="Access request" path="/admin/grant-requests" csrf={session.csrfToken} fixed={{role, acting, scopeType:role === 'CS' ? 'COMMITTEE' : 'MUNICIPALITY', ...(role !== 'CS' ? {scopeId:session.user.municipalityId} : {})}} transform={body => ({...body, validFrom:new Date(String(body['validFrom'])).toISOString(), validUntil:new Date(String(body['validUntil'])).toISOString()})} fields={[{name:'userId', label:'Recipient', options:users.data?.items.filter(user => user.enabled && user.id !== session.user.id).map(user => ({value:user.id, label:user.displayName})) ?? []}, ...(role === 'CS' ? [{name:'scopeId', label:'Committee', options:(committees.data?.items ?? []).map(item => ({value:item.id, label:`${item.name} · ${item.termLabel}`}))}] : []), {name:'validFrom', label:'Valid from (your local time)', type:'datetime-local'}, {name:'validUntil', label:'Expires (your local time)', type:'datetime-local'}]}/>}
     </AddPanel>
     <div className="panel" style={{marginBottom:16}}>
       <h2 style={{fontSize:16, marginBottom:12}}>Grant requests</h2>
@@ -1092,7 +1094,7 @@ function CaseUpload({session, ownerType, ownerId}:{session:SessionView; ownerTyp
     setPending(true); setError(null);
     try {
       const intent = await request<{data:{id:string}}>('/documents/intents', {method:'POST', csrf:session.csrfToken, key:crypto.randomUUID(), body:{ownerType, ownerId, originalFilename:file.name, declaredMime, expectedBytes:file.size, reason}});
-      await uploadBytes(`/documents/intents/${intent.data.id}/content`, file, session.csrfToken);
+      await uploadBytes(`/documents/intents/${intent.data.id}/content`, file, session.csrfToken, {'X-Audit-Reason':reason, 'Idempotency-Key':crypto.randomUUID()});
       await request(`/documents/intents/${intent.data.id}/finalize`, {method:'POST', csrf:session.csrfToken, key:crypto.randomUUID(), body:{reason}});
       form.reset();
       await cache.invalidateQueries();
@@ -1176,7 +1178,7 @@ function MeasureDetail({id, session}:{id:string; session:SessionView}) {
   const query = useQuery({queryKey:['/measures', id], queryFn:() => request<{data:Measure & {versions?:Array<{id:string;sequence:number;synopsis:string;frozenAt:string|null}>;authors?:Array<{personId:string;role:string;displayName:string}>}}>(`/measures/${id}`)});
   const timeline = useQuery({queryKey:['/measures', id, 'timeline'], queryFn:() => request<{items:TimelineEvent[]}>(`/measures/${id}/timeline`), enabled:tab === 'timeline'});
   const documents = useQuery({queryKey:['/measures', id, 'documents'], queryFn:() => request<{items:DocumentRecord[]}>(`/measures/${id}/documents`), enabled:tab === 'documents'});
-  const tasks = useQuery({queryKey:['/tasks', id], queryFn:() => request<Page<WorkTask>>('/tasks?page=1&limit=50'), enabled:tab === 'tasks' && session.permissions.includes('task.manage')});
+  const tasks = useQuery({queryKey:['/tasks', id], queryFn:() => request<Page<WorkTask>>(`/tasks?page=1&limit=50&ownerId=${id}&measureId=${id}`), enabled:tab === 'tasks' && session.permissions.includes('task.manage')});
   const referrals = useQuery({queryKey:['/measures', id, 'referrals'], queryFn:() => request<{items:Referral[]}>(`/measures/${id}/referrals`), enabled:(tab === 'referrals' || tab === 'overview') && session.permissions.includes('committee.referral.view')});
   const frame = useRef<HTMLDivElement>(null);
   useDialogKeys(expanded, frame, () => setExpanded(false));
@@ -1244,7 +1246,7 @@ function MeasureDetail({id, session}:{id:string; session:SessionView}) {
         </>
       )}
       {tab === 'tasks' && (session.permissions.includes('task.manage') ? (
-        tasks.isError ? <Notice error={tasks.error}/> : (tasks.data?.items.filter(item => item.ownerId === id || item.measureId === id).length ? <table><thead><tr><th>Task</th><th>State</th><th>Action</th></tr></thead><tbody>{tasks.data.items.filter(item => item.ownerId === id || item.measureId === id).map(task => <tr key={task.id}><td>{task.title}<small>Completing this does not file the measure.</small></td><td><Status value={task.state}/></td><td>{task.state === 'OPEN' ? <AddPanel label="Complete"><CommandForm title="Complete task" path={`/tasks/${task.id}/complete`} csrf={session.csrfToken} fields={[]} fixed={{expectedRevision:task.revision}}/></AddPanel> : <span className="muted">Done</span>}</td></tr>)}</tbody></table> : <Empty>No tasks for this case file.</Empty>)
+        tasks.isError ? <Notice error={tasks.error}/> : (tasks.data?.items.length ? <table><thead><tr><th>Task</th><th>State</th><th>Action</th></tr></thead><tbody>{tasks.data.items.map(task => <tr key={task.id}><td>{task.title}<small>Completing this does not file the measure.</small></td><td><Status value={task.state}/></td><td>{task.state === 'OPEN' ? <AddPanel label="Complete"><CommandForm title="Complete task" path={`/tasks/${task.id}/complete`} csrf={session.csrfToken} fields={[]} fixed={{expectedRevision:task.revision}}/></AddPanel> : <span className="muted">Done</span>}</td></tr>)}</tbody></table> : <Empty>No tasks for this case file.</Empty>)
       ) : <p className="later">Task access is not on this account.</p>)}
       {tab === 'referrals' && (
         <>
@@ -1481,17 +1483,14 @@ function CalendarPage({session}:{session:SessionView}) {
   const today = manilaYmd(new Date());
   const [cursor, setCursor] = useState(() => { const [year, month] = today.split('-').map(Number); return {year:year!, month:month!}; });
   const [selected, setSelected] = useState(today);
-  const query = useQuery({queryKey:['/calendar','month'], queryFn:async () => {
-    const first = await request<Page<CalendarEvent>>('/calendar?page=1&limit=100');
-    const items = [...first.items];
-    const pages = Math.ceil(first.pageInfo.total / 100);
-    for (let page = 2; page <= pages && page <= 10; page += 1) items.push(...(await request<Page<CalendarEvent>>(`/calendar?page=${page}&limit=100`)).items);
-    return items;
-  }, enabled:canSee});
-  if (!canSee) return <Empty>Calendar access is not on this account.</Empty>;
   const cells = monthCells(cursor.year, cursor.month);
+  const rangeFrom = new Date(`${cells[0]!.key}T00:00:00+08:00`).toISOString();
+  const rangeTo = new Date(`${cells[cells.length - 1]!.key}T00:00:00+08:00`);
+  rangeTo.setUTCDate(rangeTo.getUTCDate() + 1);
+  const query = useQuery({queryKey:['/calendar','month', rangeFrom, rangeTo.toISOString()], queryFn:() => request<Page<CalendarEvent>>(`/calendar?page=1&limit=100&from=${encodeURIComponent(rangeFrom)}&to=${encodeURIComponent(rangeTo.toISOString())}`), enabled:canSee});
+  if (!canSee) return <Empty>Calendar access is not on this account.</Empty>;
   const byDay = new Map<string, CalendarEvent[]>();
-  for (const item of query.data ?? []) {
+  for (const item of query.data?.items ?? []) {
     const key = manilaYmd(item.scheduledAt);
     byDay.set(key, [...(byDay.get(key) ?? []), item]);
   }
@@ -1593,12 +1592,11 @@ function VotingPage({session}:{session:SessionView}) {
 
 function DocumentsPage({session}:{session:SessionView}) {
   const canView = session.permissions.includes('document.view');
-  const query = useQuery({queryKey:['/documents'], queryFn:() => request<Page<DocumentRecord>>('/documents?page=1&limit=100'), enabled:canView});
   if (!canView) return <Empty>Document access is not on this account.</Empty>;
   return (
     <div className="panel">
       <p className="muted">Files already attached to measures, committees, meetings, or sessions. Download appears only after an approved scanner marks a file ready (D-13). This is not the e-Library.</p>
-      {query.isPending ? <p role="status">Loading records…</p> : query.isError ? <Notice error={query.error}/> : <DocumentTable items={query.data?.items ?? []} session={session} owner empty="No documents uploaded yet. Attach files from a measure, committee, meeting, or session."/>}
+      <Listing<DocumentRecord> path="/documents">{items => <DocumentTable items={items} session={session} owner empty="No documents uploaded yet. Attach files from a measure, committee, meeting, or session."/>}</Listing>
     </div>
   );
 }
@@ -1739,7 +1737,7 @@ function OrdinanceScanForm({session, ordinance, onDone}:{session:SessionView; or
     if (file.size > HISTORICAL_SCAN_MAX_BYTES) {setError(new Error('Each scan must be 12 MiB or smaller.')); return;}
     setPending(true); setError(null);
     try {
-      await uploadBytes(`/archives/ordinances/${ordinance.id}/scan`, file, session.csrfToken, {'X-Audit-Reason':reason, 'X-Original-Filename':file.name, 'Idempotency-Key':crypto.randomUUID()});
+      await uploadBytes(`/archives/ordinances/${ordinance.id}/scan`, file, session.csrfToken, {'X-Audit-Reason':reason, 'X-Original-Filename':file.name, 'X-Expected-Revision':String(ordinance.revision), 'Idempotency-Key':crypto.randomUUID()});
       await cache.invalidateQueries();
       onDone();
     } catch (err) {setError(err);}
@@ -1759,17 +1757,17 @@ function LibraryPage({session}:{session:SessionView}) {
   const canSee = session.permissions.includes('library.view');
   const [q, setQ] = useState('');
   const [kind, setKind] = useState('');
-  const [applied, setApplied] = useState({q:'', kind:''});
+  const [applied, setApplied] = useState({q:'', kind:'', page:1});
   const query = useQuery({
     queryKey:['/library', applied],
-    queryFn:() => request<Page<LibraryHit>>(`/library?page=1&limit=100${applied.q ? `&q=${encodeURIComponent(applied.q)}` : ''}${applied.kind ? `&kind=${applied.kind}` : ''}`),
+    queryFn:() => request<Page<LibraryHit>>(`/library?page=${applied.page}&limit=25${applied.q ? `&q=${encodeURIComponent(applied.q)}` : ''}${applied.kind ? `&kind=${applied.kind}` : ''}`),
     enabled:canSee,
   });
   if (!canSee) return <Empty>e-Library access is not on this account.</Empty>;
   return (
     <div className="panel">
       <p className="muted">Permission-filtered index of case files the caller can already see. This is not an official archive, public portal, or codification.</p>
-      <form className="command-form" onSubmit={event => {event.preventDefault(); setApplied({q:q.trim(), kind});}}>
+      <form className="command-form" onSubmit={event => {event.preventDefault(); setApplied({q:q.trim(), kind, page:1});}}>
         <div className="form-grid">
           <label>Keyword<input value={q} onChange={event => setQ(event.target.value)} maxLength={120} placeholder="Title, subject, or reference"/></label>
           <label>Kind
@@ -1780,6 +1778,7 @@ function LibraryPage({session}:{session:SessionView}) {
               <option value="SESSION">Sessions</option>
               <option value="MEETING">Meetings</option>
               <option value="COMMITTEE">Committees</option>
+              {session.permissions.includes('archive.view') && <option value="ORDINANCE">Historical ordinances</option>}
             </select>
           </label>
         </div>
@@ -1790,6 +1789,13 @@ function LibraryPage({session}:{session:SessionView}) {
           <tr key={`${item.kind}-${item.id}`}><td><Status value={item.kind}/></td><td><strong>{item.title}</strong><small>{item.detail}</small></td><td><Status value={item.state}/></td></tr>
         ))}</tbody></table>
       ) : <Empty>No matching records in the records you can already see.</Empty>}
+      {query.data && query.data.pageInfo.total > 0 && <div className="pagination">
+        <span>Showing {query.data.items.length} of {query.data.pageInfo.total} records</span>
+        <div>
+          <button aria-label="Previous page" type="button" disabled={applied.page === 1} onClick={() => setApplied(value => ({...value, page:value.page - 1}))}><ChevronLeft size={16}/></button>
+          <button aria-label="Next page" type="button" disabled={applied.page * 25 >= query.data.pageInfo.total} onClick={() => setApplied(value => ({...value, page:value.page + 1}))}><ChevronRight size={16}/></button>
+        </div>
+      </div>}
     </div>
   );
 }
@@ -1877,7 +1883,7 @@ function LoginPage({sessionExpired, error}:{sessionExpired:boolean; error?:unkno
             <img className="login-wordmark" src="/ltas-logo.png" alt="LTAS"/>
             <img src="/brand/libungan-seal.png" alt="Seal of the Municipality of Libungan"/>
             <div>
-              <strong>Libungan LTAS</strong>
+              <strong>LTAS</strong>
               <span>Sangguniang Bayan</span>
             </div>
           </div>
@@ -1925,7 +1931,7 @@ function LoginPage({sessionExpired, error}:{sessionExpired:boolean; error?:unkno
             <a href="/contact"><ShieldCheck size={14}/> Need access? Contact the SB Secretariat</a>
           </div>
         </form>
-        <p className="login-copy">© {new Date().getFullYear()} Libungan LTAS · Sangguniang Bayan</p>
+        <p className="login-copy">© {new Date().getFullYear()} LTAS · Sangguniang Bayan</p>
       </main>
     </div>
   );

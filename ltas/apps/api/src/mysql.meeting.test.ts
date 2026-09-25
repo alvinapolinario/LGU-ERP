@@ -28,7 +28,7 @@ function statusOf(error:unknown):number {
 }
 function key(label:string):string {return `gtest-${label}-${randomUUID().replaceAll('-','')}`.slice(0,100);}
 function asRequest(principal:Principal):AuthRequest {
-  return {principal,correlationId:randomUUID(),get:(header:string)=>header.toLowerCase()==='idempotency-key'?key(principal.id.slice(0,8)):undefined} as unknown as AuthRequest;
+  return {principal,correlationId:randomUUID(),get:(header:string)=>header.toLowerCase()==='idempotency-key'?key(principal.id.slice(0,8)):header.toLowerCase()==='x-audit-reason'?reason:undefined} as unknown as AuthRequest;
 }
 
 describe.skipIf(!live)('T-FR-COMMITTEE-002 MySQL 8.4 meeting gates',{timeout:30000},()=>{
@@ -134,6 +134,10 @@ describe.skipIf(!live)('T-FR-COMMITTEE-002 MySQL 8.4 meeting gates',{timeout:300
     await expect(meetings.addReferral(await actor(secId),scheduled.data.id,{referralId:later.data[0]!.id,expectedRevision:closed.data.revision,reason})).rejects.toMatchObject({status:422});
     const next=await meetings.create(await actor(csLeadId),leadId,{title:'Follow-up meeting',venue:'Committee room',scheduledAt,referralIds:[],reason});
     expect(next.data.reference).toBe('M-2026-2');
+    const third=await measures.create(await actor(lsId),{...draft(),title:'An Ordinance Kept Off A Closed Referral'});
+    const closedReferral=await referrals.create(await actor(secId),third.data.id,{leadCommitteeId:leadId,jointCommitteeIds:[],referredOn:'2026-09-22',expectedRevision:third.data.revision,reason});
+    const shut=await referrals.close(await actor(secId),closedReferral.data[0]!.id,{expectedRevision:closedReferral.data[0]!.revision,reason});
+    await expect(meetings.addReferral(await actor(secId),next.data.id,{referralId:shut.data.id,expectedRevision:next.data.revision,reason})).rejects.toMatchObject({status:422});
     expect(statusOf(Object.assign(new HttpException({code:'MEETING_CLOSED'},422)))).toBe(422);
   });
 

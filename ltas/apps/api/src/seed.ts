@@ -154,7 +154,7 @@ try {
       if(officials.added.length && !addedLs && !addedRoster) return 'officials';
       return addedLs && addedRoster?'ls-roster':addedLs?'ls':'roster';
     }
-    await tx.municipality.create({data:{id:municipalityId,code:'DEMO-001',name:'Municipality of San Isidro (Fictional)',province:'Demonstration Province'}});
+    await tx.municipality.create({data:{id:municipalityId,code:'DEMO-001',name:'Municipality of Libungan',province:'North Cotabato'}});
     await tx.councilTerm.create({data:{id:termId,municipalityId,label:'2025–2028 demonstration term',startsOn:new Date('2025-07-01'),endsOn:new Date('2028-06-30')}});
     for(const identity of identities) {
       await tx.user.create({data:{id:identity.id,municipalityId,issuer,subject:identity.id,displayName:identity.name}});

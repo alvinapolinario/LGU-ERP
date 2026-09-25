@@ -43,7 +43,7 @@ Use fictional data only. Do not point this procedure at a real municipality.
 
 1. From `ltas/`: `node scripts/create-local-env.mjs` (refuses to overwrite an existing `.env`).
 2. `docker compose -f infrastructure/docker/compose.dev.yml up -d`
-   Optional Phase 2 object storage: `docker compose -f infrastructure/docker/compose.dev.yml --profile object-storage up -d`. Set `MINIO_ENDPOINT=http://127.0.0.1:9000` plus access/secret keys matching `MINIO_ROOT_*` in `.env`. Uploads without MinIO return 503.
+   Development Compose starts MinIO on loopback `127.0.0.1:9000`. `.env` must set `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, and `MINIO_SECRET_KEY` (the generator copies them from `MINIO_ROOT_*`). Uploads return 503 only when those keys or the MinIO process are missing.
 3. `npm install`
 4. `npm run db:generate && npm run db:migrate && npm run build`. `db:migrate` deploys the schema as `ltas_migrator`, then applies `infrastructure/database/runtime-grants.sql` as root inside the development MySQL container. A fresh volume gets the same runtime privileges the restore rehearsal reapplies. `npm run db:grants` repeats that grant step alone.
 5. `npm run db:seed` (empty database only; `ALLOW_SYNTHETIC_SEED=yes`)
@@ -52,7 +52,7 @@ Use fictional data only. Do not point this procedure at a real municipality.
 8. Open `http://localhost:5173`, sign in with a generated account, and confirm each seeded role. Another machine on the same private LAN can use `http://<this-host-lan-ip>:5173`. Vite listens on all interfaces; Keycloak `8081` is published for that login hop. MySQL and Redis stay on loopback. Re-run provisioning after a network change so LAN redirect URIs stay current.
 9. `npm run check` for generate, typecheck, unit tests, the MySQL gate suites, and build. The MySQL suites need the local 8.4 instance from Compose. They cover access, measures, referrals, meetings, sessions, the library, and the historical ordinance image path. `npm run test:mysql` runs those suites alone. `LTAS_RESTORE_CONFIRM=ltas-restore-rehearsal npm run recovery -- rehearse` is the isolated restore rehearsal (T-NFR-RECOVERY-001); procedure in [backup README](../infrastructure/backup/README.md).
 
-The API stays on `127.0.0.1:3000` and is reached through the Vite `/api` proxy. Compose publishes MySQL `3307` and Redis `6380` on loopback only. Keycloak `8081` is reachable on the LAN in this development compose so a remote browser can complete sign-in. MinIO is the `object-storage` profile for Phase 2 quarantine uploads.
+The API stays on `127.0.0.1:3000` and is reached through the Vite `/api` proxy. Compose publishes MySQL `3307` and Redis `6380` on loopback only. Keycloak `8081` is reachable on the LAN in this development compose so a remote browser can complete sign-in. MinIO starts with the development Compose for Phase 2 quarantine uploads and stays on loopback.
 
 ## Remaining Phase 1 gates
 

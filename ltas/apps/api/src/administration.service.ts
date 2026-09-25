@@ -77,7 +77,8 @@ export class AdministrationService {
         tx.grantRequest.findMany({where:{userId:input.userId,role:input.role,scopeType:input.scopeType,scopeId:input.scopeId,state:'PENDING'}}),
       ]);
       if(grants.some(g=>conflictingGrant(g,window)) || pending.some(g=>conflictingGrant({...g,revokedAt:null},window))) fail(409,'GRANT_OVERLAP','An overlapping grant already exists or is awaiting review.');
-      const result=await tx.grantRequest.create({data:{...input,id:randomUUID(),municipalityId:r.principal.municipalityId,validFrom:window.validFrom,validUntil:window.validUntil,requestedBy:r.principal.id}});
+      const {acting: _acting, ...stored}=input;
+      const result=await tx.grantRequest.create({data:{...stored,id:randomUUID(),municipalityId:r.principal.municipalityId,validFrom:window.validFrom,validUntil:window.validUntil,requestedBy:r.principal.id}});
       return {entityId:result.id,result,changes:input};
     })};
   }

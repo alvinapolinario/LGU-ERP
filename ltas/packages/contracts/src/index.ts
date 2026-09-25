@@ -71,9 +71,11 @@ export const committeeSchema = z.object({ termId: idSchema, code: z.string().reg
 export const memberSchema = z.object({ personId: idSchema, role: z.enum(['CHAIR', 'VICE_CHAIR', 'MEMBER', 'STAFF']), startsOn: date, endsOn: date, expectedRevision: revisionSchema, reason: reasonSchema }).strict().refine(v => v.endsOn >= v.startsOn, {message:'End date must follow start date', path:['endsOn']});
 export const userSchema = z.object({ subject: text(255), displayName: text(160), reason: reasonSchema }).strict();
 export const userStateSchema = z.object({ enabled: z.boolean(), expectedRevision: revisionSchema, reason: reasonSchema }).strict();
-export const grantSchema = z.object({ userId: idSchema, role: z.enum(roles), scopeType: z.enum(['MUNICIPALITY', 'COMMITTEE']), scopeId: idSchema, validFrom: instant, validUntil: instant, reason: reasonSchema }).strict().refine(v => new Date(v.validUntil) > new Date(v.validFrom), {message:'Grant expiry must follow its start',path:['validUntil']}).refine(v => v.scopeType === 'MUNICIPALITY' || v.role === 'CS', {message:'Only committee staff grants may have committee scope',path:['scopeType']}).refine(v => v.role !== 'CS' || v.scopeType === 'COMMITTEE', {message:'Committee staff require a specific committee',path:['scopeType']});
+export const grantSchema = z.object({ userId: idSchema, role: z.enum(roles), scopeType: z.enum(['MUNICIPALITY', 'COMMITTEE']), scopeId: idSchema, validFrom: instant, validUntil: instant, acting: z.boolean().optional(), reason: reasonSchema }).strict().refine(v => new Date(v.validUntil) > new Date(v.validFrom), {message:'Grant expiry must follow its start',path:['validUntil']}).refine(v => !v.acting || new Date(v.validUntil).getTime() - new Date(v.validFrom).getTime() <= 24 * 60 * 60 * 1000, {message:'An acting or emergency grant cannot last longer than 24 hours',path:['validUntil']}).refine(v => v.scopeType === 'MUNICIPALITY' || v.role === 'CS', {message:'Only committee staff grants may have committee scope',path:['scopeType']}).refine(v => v.role !== 'CS' || v.scopeType === 'COMMITTEE', {message:'Committee staff require a specific committee',path:['scopeType']});
 export const reviewSchema = z.object({ expectedRevision: revisionSchema, reason: reasonSchema }).strict();
 export const paginationSchema = z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(25) }).strict();
+export const taskQuerySchema = paginationSchema.extend({ ownerId: idSchema.optional(), measureId: idSchema.optional() }).strict();
+export const calendarQuerySchema = paginationSchema.extend({ from: z.iso.datetime().optional(), to: z.iso.datetime().optional() }).strict();
 export const publicCouncilQuerySchema = z.object({ termId: idSchema.optional() }).strict();
 export const publicMeasureQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -211,7 +213,7 @@ export const libraryQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   q: z.string().trim().max(120).optional().default(''),
-  kind: z.enum(['MEASURE', 'DOCUMENT', 'SESSION', 'MEETING', 'COMMITTEE']).optional(),
+  kind: z.enum(['MEASURE', 'DOCUMENT', 'SESSION', 'MEETING', 'COMMITTEE', 'ORDINANCE']).optional(),
 }).strict();
 export const REPORT_DEFINITION = 'P-REPORT-INTERIM-1';
 export interface CommitteeMeeting {
@@ -311,7 +313,7 @@ export interface PublicMeasure {
 export interface PublicHome {
   municipality:PublicMunicipality;
   term:PublicTerm|null;
-  stats:{measures:number; people:number; committees:number; sessions:number};
+  stats:{measures:number; people:number; committees:number};
   recentMeasures:PublicMeasure[];
   officers:{mayor:PublicPerson|null; viceMayor:PublicPerson|null; secretary:PublicPerson|null};
   note:string;

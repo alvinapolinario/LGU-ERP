@@ -35,11 +35,10 @@ export class PublicCatalogService {
   async home() {
     const {municipality,term,scope,roster}=await this.installation();
     const released={...scope,stage:'SUBMITTED' as const};
-    const [measures,people,committees,sessions,recent,officers]=await Promise.all([
+    const [measures,people,committees,recent,officers]=await Promise.all([
       this.ctx.db.legislativeMeasure.count({where:released}),
       this.ctx.db.person.count({where:roster}),
       this.ctx.db.committee.count({where:roster}),
-      this.ctx.db.legislativeSession.count({where:scope}),
       this.ctx.db.legislativeMeasure.findMany({where:released,orderBy:{createdAt:'desc'},take:6}),
       this.ctx.db.person.findMany({where:{...roster,positionCode:{in:['MAYOR','VICE_MAYOR','SB_SECRETARY']}},select:personPublic}),
     ]);
@@ -47,7 +46,7 @@ export class PublicCatalogService {
     return {data:{
       municipality:{name:municipality.name,province:municipality.province,code:municipality.code},
       term:term?{label:term.label,startsOn:term.startsOn.toISOString(),endsOn:term.endsOn.toISOString()}:null,
-      stats:{measures,people,committees,sessions},
+      stats:{measures,people,committees},
       recentMeasures:recent.map(row=>viewMeasure(row)),
       officers:{mayor:byPosition.get('MAYOR')??null, viceMayor:byPosition.get('VICE_MAYOR')??null, secretary:byPosition.get('SB_SECRETARY')??null},
       note:PUBLIC_CATALOG_NOTE,

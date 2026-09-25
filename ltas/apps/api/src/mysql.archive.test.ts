@@ -19,12 +19,13 @@ const migratorUrl=process.env['MIGRATION_DATABASE_URL'];
 const live=Boolean(appUrl && migratorUrl);
 const reason='Synthetic ordinance image reading.';
 function key(label:string):string {return `atest-${label}-${randomUUID().replaceAll('-','')}`.slice(0,100);}
-function asRequest(principal:Principal):AuthRequest {
+function asRequest(principal:Principal, revision=1):AuthRequest {
   return {principal,correlationId:randomUUID(),get:(header:string)=>{
     const name=header.toLowerCase();
     if(name==='idempotency-key') return key(principal.id.slice(0,8));
     if(name==='x-audit-reason') return reason;
     if(name==='x-original-filename') return 'page.png';
+    if(name==='x-expected-revision') return String(revision);
     return undefined;
   }} as unknown as AuthRequest;
 }
@@ -35,7 +36,7 @@ describe.skipIf(!live)('historical ordinance image text',{timeout:30000},()=>{
   let archives:ArchivesService;
   const issuer='http://ltas.test/realms/archive';
 
-  async function actor():Promise<AuthRequest> {return asRequest(await loadPrincipal(app,secId));}
+  async function actor(revision=1):Promise<AuthRequest> {return asRequest(await loadPrincipal(app,secId),revision);}
 
   beforeAll(async()=>{
     app=createDatabase(appUrl!); migrator=createDatabase(migratorUrl!);
@@ -72,7 +73,8 @@ describe.skipIf(!live)('historical ordinance image text',{timeout:30000},()=>{
     const image='/tmp/ltas-ordinance-page.png';
     execFileSync('python3',['-c',`from PIL import Image, ImageDraw\nimg=Image.new('RGB',(900,180),'white')\nd=ImageDraw.Draw(img)\nd.text((16,70),'Libungan public market ordinance',fill='black')\nimg.save(${JSON.stringify(image)})`]);
     const created=await archives.create(await actor(),{termId,title:'An earlier market ordinance',sourceNote:'Bound volume in the secretariat cabinet.',reason});
-    await archives.setScan(await actor(),created.data.id,readFileSync(image));
+    await expect(archives.setScan(await actor(created.data.revision+1),created.data.id,readFileSync(image))).rejects.toMatchObject({status:409});
+    await archives.setScan(await actor(created.data.revision),created.data.id,readFileSync(image));
     const found=await archives.list(await actor(),{q:'market',page:1,limit:25});
     expect(found.items.some(item=>item.id===created.data.id && item.snippet?.toLowerCase().includes('market'))).toBe(true);
     const detail=await archives.get(await actor(),created.data.id);

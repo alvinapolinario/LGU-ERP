@@ -22,7 +22,7 @@ const reason='Synthetic session-gate fixture.';
 const scheduledAt='2026-09-22T02:00:00.000Z';
 function key(label:string):string {return `stest-${label}-${randomUUID().replaceAll('-','')}`.slice(0,100);}
 function asRequest(principal:Principal):AuthRequest {
-  return {principal,correlationId:randomUUID(),get:(header:string)=>header.toLowerCase()==='idempotency-key'?key(principal.id.slice(0,8)):undefined} as unknown as AuthRequest;
+  return {principal,correlationId:randomUUID(),get:(header:string)=>header.toLowerCase()==='idempotency-key'?key(principal.id.slice(0,8)):header.toLowerCase()==='x-audit-reason'?reason:undefined} as unknown as AuthRequest;
 }
 
 describe.skipIf(!live)('T-FR-SESSION-001 MySQL 8.4 session gates',{timeout:30000},()=>{
@@ -100,7 +100,10 @@ describe.skipIf(!live)('T-FR-SESSION-001 MySQL 8.4 session gates',{timeout:30000
 
   it('schedules a session, records attendance and a tally, and keeps the result unofficial',async()=>{
     const created=await measures.create(await actor(lsId),draft());
-    const body={termId,title:'Regular sitting',venue:'Session hall',kind:'REGULAR' as const,scheduledAt,measureIds:[created.data.id],reason};
+    const draftBody={termId,title:'Regular sitting',venue:'Session hall',kind:'REGULAR' as const,scheduledAt,measureIds:[created.data.id],reason};
+    await expect(sessions.create(await actor(secId),draftBody)).rejects.toMatchObject({status:422});
+    const submitted=await measures.transition(await actor(lsId),created.data.id,'submit',{expectedRevision:created.data.revision,reason});
+    const body={...draftBody,measureIds:[submitted.data.id]};
     await expect(sessions.create(await actor(sysId),body)).rejects.toMatchObject({status:403});
     await expect(sessions.create(await actor(csId),body)).rejects.toMatchObject({status:403});
     await expect(sessions.create(await actor(lsId),body)).rejects.toMatchObject({status:403});
@@ -111,10 +114,13 @@ describe.skipIf(!live)('T-FR-SESSION-001 MySQL 8.4 session gates',{timeout:30000
     await expect(sessions.list(await actor(csId),{page:1,limit:25})).rejects.toMatchObject({status:403});
     const present=await sessions.recordAttendance(await actor(lsId),scheduled.data.id,{personId,disposition:'PRESENT',expectedRevision:scheduled.data.revision,reason});
     expect(present.data.attendance?.[0]).toMatchObject({personId,disposition:'PRESENT'});
+    const corrected=await sessions.recordAttendance(await actor(lsId),present.data.id,{personId,disposition:'EXCUSED',expectedRevision:present.data.revision,reason});
+    expect(corrected.data.attendance?.[0]).toMatchObject({personId,disposition:'EXCUSED'});
     await expect(sessions.recordVote(await actor(lsId),present.data.id,{measureId:created.data.id,yesCount:5,noCount:1,abstainCount:0,expectedRevision:present.data.revision,reason})).rejects.toMatchObject({status:403});
-    const tallied=await sessions.recordVote(await actor(secId),present.data.id,{measureId:created.data.id,yesCount:5,noCount:1,abstainCount:0,expectedRevision:present.data.revision,reason});
-    expect(tallied.data.votes?.[0]).toMatchObject({yesCount:5,noCount:1,abstainCount:0,result:'RECORDED'});
-    const closed=await sessions.close(await actor(secId),tallied.data.id,{expectedRevision:tallied.data.revision,reason});
+    const tallied=await sessions.recordVote(await actor(secId),corrected.data.id,{measureId:created.data.id,yesCount:5,noCount:1,abstainCount:0,expectedRevision:corrected.data.revision,reason});
+    const revised=await sessions.recordVote(await actor(secId),tallied.data.id,{measureId:created.data.id,yesCount:4,noCount:2,abstainCount:1,expectedRevision:tallied.data.revision,reason});
+    expect(revised.data.votes?.[0]).toMatchObject({yesCount:4,noCount:2,abstainCount:1,result:'RECORDED'});
+    const closed=await sessions.close(await actor(secId),revised.data.id,{expectedRevision:revised.data.revision,reason});
     expect(closed.data.state).toBe('CLOSED');
     await expect(sessions.recordAttendance(await actor(secId),closed.data.id,{personId,disposition:'ABSENT',expectedRevision:closed.data.revision,reason})).rejects.toMatchObject({status:422});
     const intent=await documents.createIntent(await actor(secId),{ownerType:'SESSION',ownerId:closed.data.id,originalFilename:'notes.pdf',declaredMime:'application/pdf',expectedBytes:20,reason});

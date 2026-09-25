@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Inject, Injectable, StreamableFile } from '@nestjs/common';
 import { HISTORICAL_SCAN_MAX_BYTES, historicalOrdinanceQuerySchema, historicalOrdinanceSchema, historicalOrdinanceTextSchema, historicalOrdinanceUpdateSchema, idSchema, reasonSchema, type HistoricalOrdinance, type HistoricalOrdinanceDetail } from '@ltas/contracts';
+import { scanBytes } from './domain/scanner.js';
 import { CONTEXT, type AppContext } from './context.js';
 import { Commands } from './commands.js';
 import { requirePermission } from './access.js';
@@ -101,16 +102,23 @@ export class ArchivesService {
     const reason = reasonSchema.parse(r.get('x-audit-reason'));
     if (!Buffer.isBuffer(body) || body.length === 0) fail(422, 'FILE_REQUIRED', 'Attach a JPEG, PNG, or PDF scan.');
     if (body.length > HISTORICAL_SCAN_MAX_BYTES) fail(422, 'FILE_TOO_LARGE', 'Each scan must be 12 MiB or smaller.');
-    const existing = await this.ctx.db.historicalOrdinance.findFirst({where:{id, ...this.scope(r)}, select:{id:true}});
+    const expectedRevision = Number(r.get('x-expected-revision'));
+    if (!Number.isInteger(expectedRevision) || expectedRevision < 1) fail(400, 'REVISION_REQUIRED', 'Send the ordinance revision with the scan.');
+    const existing = await this.ctx.db.historicalOrdinance.findFirst({where:{id, ...this.scope(r)}, select:{id:true, revision:true}});
     if (!existing) fail(404, 'NOT_FOUND', 'Ordinance record not found.');
+    if (existing.revision !== expectedRevision) fail(409, 'STALE_REVISION', 'Reload this ordinance before replacing the scan.');
     const mime = detectMime(body, 'application/pdf');
     if (mime !== 'application/pdf' && mime !== 'image/jpeg' && mime !== 'image/png') fail(422, 'UNSUPPORTED_TYPE', 'Use a JPEG, PNG, or PDF scan.');
     const reading = await extractOrdinanceText(body, mime);
     const sha256 = createHash('sha256').update(body).digest('hex');
+    const verdict = scanBytes(body);
     const filename = (r.get('x-original-filename') ?? 'scan').replace(/[/\\]/g, '_').slice(0, 200);
-    return {data:await this.commands.execute(r, 'archive.encode', 'ordinance.scan-stored', {id, mime, sha256, bytes:body.length, extractState:reading.extractState, reason}, async tx => {
+    return {data:await this.commands.execute(r, 'archive.encode', 'ordinance.scan-stored', {id, mime, sha256, bytes:body.length, extractState:reading.extractState, scanVerdict:verdict, expectedRevision, reason}, async tx => {
+      const current = await tx.historicalOrdinance.findFirst({where:{id, ...this.scope(r)}});
+      if (!current) fail(404, 'NOT_FOUND', 'Ordinance record not found.');
+      if (current.revision !== expectedRevision) fail(409, 'STALE_REVISION', 'Reload this ordinance before replacing the scan.');
       const result = await tx.historicalOrdinance.update({where:{id}, data:{scanMime:mime, scanSha256:sha256, scanFilename:filename, scanBytes:Uint8Array.from(body), extractedText:reading.extractedText, extractState:reading.extractState, extractNote:reading.extractNote, revision:{increment:1}}, include:{term:{select:{label:true}}}});
-      return {entityId:id, result:{...view(result, ''), extractNote:reading.extractNote}, changes:{scanSha256:sha256, mime, bytes:body.length, extractState:reading.extractState, extractNote:reading.extractNote, reason}};
+      return {entityId:id, result:{...view(result, ''), extractNote:reading.extractNote}, changes:{scanSha256:sha256, mime, bytes:body.length, extractState:reading.extractState, extractNote:reading.extractNote, scanVerdict:verdict, storage:'The page image stays on the ordinance row. No approved scanner has marked it clean (D-13).', reason}};
     })};
   }
   async scan(r:AuthRequest, rawId:string) {

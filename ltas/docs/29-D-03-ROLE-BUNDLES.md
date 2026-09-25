@@ -28,7 +28,7 @@ These are facts about the running foundation, not a claim that the municipality 
 Grant rules already encoded:
 
 - Requester, reviewer, and recipient must be three different people.
-- Grants are dated; revocation and account disable take effect on the next protected request. Software does not yet reject a window longer than the proposed 24-hour cap (Q6).
+- Grants are dated; revocation and account disable take effect on the next protected request. A request marked acting or emergency is rejected when the window is longer than 24 hours (Q6). A term appointment is not capped. Owner signatures for Q6 are still open.
 - Only CS may be committee-scoped; SYS cannot be committee-scoped.
 - Overlapping unrevoked grants of the same role and scope are rejected, including concurrent dual-control review (`npm run test:mysql`).
 
@@ -82,7 +82,7 @@ Answer with name/title, date, and a short rationale. Do not answer from generic 
 | Q3 | Second SYS (or approved alternate) who can review grants when the requester is the other SYS | Secretary + IT | 2026-09-21 workshop: two distinct Municipal IT posts, both SYS. Primary requests; independent reviewer approves. Occupants TBD. No non-SYS alternate; `grant.approve` stays SYS-only. Reviewer ≠ requester ≠ recipient. Fictional seed pair is not this answer. |
 | Q4 | How acting Secretary / acting staff is recorded (dated grant vs other instrument) | Secretary + PO | 2026-09-21 workshop: dated LTAS grant only — same role, bounded validity, different linked account. No separate “acting” role; do not copy another person’s identity. No additional paper instrument required in LTAS. Occupants TBD. Duration: Q6. |
 | Q5 | Who reviews IT emergency host/database access after the fact | IT + sponsor | 2026-09-21 workshop: Secretary to the Sanggunian reviews after the fact, in addition to IT logging. Reviewer must differ from the person who used the access. Occupant TBD. No LTAS break-glass API. |
-| Q6 | Maximum duration of an emergency or acting grant | Secretary + IT | 2026-09-21 workshop: **one cap, 24 hours**, for both acting grants and emergency SYS/SEC grants. Host/database emergency access stays outside LTAS (Q5) and is not this grant. Software still stores any `validFrom`/`validUntil`; it does not yet reject a longer window. Owner signatures still required. |
+| Q6 | Maximum duration of an emergency or acting grant | Secretary + IT | 2026-09-21 workshop: **one cap, 24 hours**, for both acting grants and emergency SYS/SEC grants. Host/database emergency access stays outside LTAS (Q5) and is not this grant. A request marked acting or emergency cannot exceed 24 hours. Term appointments are not capped. Owner signatures still required. |
 | Q7 | Who will be the designated certifier for measures when Phase 2 starts (office, not only a role code) | Secretary + PO | 2026-09-21 workshop: confirm Q1 §3.5. **Secretary to the Sanggunian** records; **presiding officer** confirms. Occupants TBD. Not the SEC role code alone. Certify/file/release commands remain out of Phase 1. |
 | Q8 | Whether any proposed 06 role must be brought forward before Phase 2 | Product + Secretary | 2026-09-21 workshop: bring **LS (legislative staff)** forward when Phase 2 is authorized. **2026-09-21 engineering: LS live** for assigned draft preparation, filing support, and evidence entry. Other 06 roles stay inactive. |
 

@@ -25,7 +25,7 @@ function statusOf(error:unknown):number {
 }
 function key(label:string):string {return `mtest-${label}-${randomUUID().replaceAll('-','')}`.slice(0,100);}
 function asRequest(principal:Principal):AuthRequest {
-  return {principal,correlationId:randomUUID(),get:(header:string)=>header.toLowerCase()==='idempotency-key'?key(principal.id.slice(0,8)):undefined} as unknown as AuthRequest;
+  return {principal,correlationId:randomUUID(),get:(header:string)=>header.toLowerCase()==='idempotency-key'?key(principal.id.slice(0,8)):header.toLowerCase()==='x-audit-reason'?reason:undefined} as unknown as AuthRequest;
 }
 
 describe.skipIf(!live)('T-FR-MEASURE MySQL 8.4 gates',{timeout:30000},()=>{
@@ -146,6 +146,7 @@ describe.skipIf(!live)('T-FR-MEASURE MySQL 8.4 gates',{timeout:30000},()=>{
     const created=await measures.create(await actor(lsId),draftBody());
     const intent=await documents.createIntent(await actor(lsId),{ownerType:'MEASURE',ownerId:created.data.id,originalFilename:'draft.pdf',declaredMime:'application/pdf',expectedBytes:20,reason});
     await documents.storeContent(await actor(lsId),intent.data.id,Buffer.from('%PDF-1.4 fixture'));
+    await expect(documents.storeContent(await actor(lsId),intent.data.id,Buffer.from('%PDF-1.4 fixture'))).rejects.toMatchObject({status:409});
     const finalized=await documents.finalize(await actor(lsId),intent.data.id,{reason});
     expect(finalized.data.latestState).toBe('QUARANTINED');
     expect(finalized.data.scanVerdict).toBe('UNKNOWN');

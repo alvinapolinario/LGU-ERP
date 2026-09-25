@@ -54,7 +54,7 @@ Still later: hearings, committee reports, certified voting, post-approval, codif
 | `apps/web/` | Authenticated municipal workspace and the demonstration catalog at `/home`, `/track`, and `/council` |
 | `apps/api/` | Modular-monolith backend and same-codebase worker |
 | `packages/contracts/` | Shared Zod contracts and DTO types |
-| `infrastructure/docker/` | Compose definitions for MySQL, Redis, Keycloak; optional MinIO |
+| `infrastructure/docker/` | Compose definitions for MySQL, Redis, Keycloak, and loopback MinIO |
 | `infrastructure/nginx/` | Staging reverse-proxy example |
 | `infrastructure/database/` | Database bootstrap and runtime grants |
 | `infrastructure/backup/` | Recovery rehearsal procedure and redacted T-NFR-RECOVERY-001 evidence |

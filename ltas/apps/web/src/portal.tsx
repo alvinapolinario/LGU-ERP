@@ -88,14 +88,13 @@ export function PublicPortal({path, navigate}:{path:string; navigate:(next:strin
           </span>
         </button>
         <div className="gwt-brand-side">
-          <p className="gwt-amping">Amping <span>Libungan</span></p>
           <PhilippineTime/>
         </div>
       </div>
       <div className="gwt-ears">
-        <img className="gwt-ear-mark" src={TRANSPARENCY_SEAL} alt="Philippine Transparency Seal"/>
-        <img className="gwt-ear-mark" src={FOI_LOGO} alt="Freedom of Information"/>
-        <img className="gwt-ear-mark" src={BAGONG_PILIPINAS} alt="Bagong Pilipinas"/>
+        <a href="https://www.libungan.gov.ph/" rel="noreferrer" aria-label="Philippine Transparency Seal"><img className="gwt-ear-mark" src={TRANSPARENCY_SEAL} alt=""/></a>
+        <a href="https://www.foi.gov.ph/" rel="noreferrer" aria-label="Freedom of Information"><img className="gwt-ear-mark" src={FOI_LOGO} alt=""/></a>
+        <a href="https://bagongpilipinas.ph/" rel="noreferrer" aria-label="Bagong Pilipinas"><img className="gwt-ear-mark" src={BAGONG_PILIPINAS} alt=""/></a>
       </div>
       {route.page === 'home' && (
         <section className="gwt-banner" aria-label="Banner">
@@ -178,7 +177,6 @@ function HomePage({navigate, home}:{navigate:(next:string)=>void; home:ReturnTyp
         <li><FileText size={18}/><strong>{data.stats.measures}</strong><span>Submitted measures</span></li>
         <li><Users size={18}/><strong>{data.stats.people}</strong><span>Directory names</span></li>
         <li><Landmark size={18}/><strong>{data.stats.committees}</strong><span>Committees</span></li>
-        <li><Clock size={18}/><strong>{data.stats.sessions}</strong><span>Recorded sessions</span></li>
       </ul>
       <div className="portal-head"><h2>Recent documents</h2><button className="portal-text" type="button" onClick={() => navigate('/track')}>View all</button></div>
       {data.recentMeasures.length ? (
@@ -320,6 +318,7 @@ function CouncilPage() {
       )}
       <MemberGrid title="Sangguniang Bayan Members" lead="The elected Municipal Councilors — your representatives." people={council.members} onOpen={setOpenId} roster/>
       {exOfficio.length > 0 && <MemberGrid title="Ex officio members" lead="Liga ng mga Barangay President and SK Federation President." people={exOfficio} onOpen={setOpenId}/>}
+      <MemberGrid title="Other directory names" lead="People encoded on this term outside the seats listed above. A position label is not a certified service history." people={council.other} onOpen={setOpenId}/>
       {openId && <PersonDialog personId={openId} profile={profile.data?.data} pending={profile.isPending} error={profile.error} onClose={() => setOpenId(null)}/>}
     </section>
   );

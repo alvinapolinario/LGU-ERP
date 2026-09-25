@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { attendanceSchema, idSchema, paginationSchema, reviewSchema, sessionAgendaSchema, sessionCreateSchema, sessionEditSchema, sessionVoteSchema } from '@ltas/contracts';
+import { attendanceSchema, calendarQuerySchema, idSchema, paginationSchema, reviewSchema, sessionAgendaSchema, sessionCreateSchema, sessionEditSchema, sessionVoteSchema } from '@ltas/contracts';
 import { CONTEXT, type AppContext } from './context.js';
 import { Commands } from './commands.js';
 import { assignedCommitteeIds, canMunicipality, requirePermission } from './access.js';
@@ -100,7 +100,7 @@ export class SessionsService {
       else await tx.sessionAttendance.create({data:{id:randomUUID(),municipalityId:r.principal.municipalityId,sessionId:id,personId:input.personId,disposition:input.disposition}});
       await tx.legislativeSession.update({where:{id},data:{revision:{increment:1}}});
       const result=await tx.legislativeSession.findUniqueOrThrow({where:{id},include});
-      return {entityId:id,result:this.view(result),changes:{personId:input.personId,disposition:input.disposition,note:'Attendance is not a quorum declaration.',reason:input.reason}};
+      return {entityId:id,result:this.view(result),changes:{personId:input.personId,previousDisposition:existing?.disposition??null,disposition:input.disposition,note:'Attendance is not a quorum declaration.',reason:input.reason}};
     })};
   }
   async recordVote(r:AuthRequest,rawId:string,body:unknown) {
@@ -117,32 +117,36 @@ export class SessionsService {
       else await tx.sessionVote.create({data:{id:randomUUID(),municipalityId:r.principal.municipalityId,sessionId:id,measureId:input.measureId,measureVersionId:item.measureVersionId,yesCount:input.yesCount,noCount:input.noCount,abstainCount:input.abstainCount,result:'RECORDED'}});
       await tx.legislativeSession.update({where:{id},data:{revision:{increment:1}}});
       const result=await tx.legislativeSession.findUniqueOrThrow({where:{id},include});
-      return {entityId:id,result:this.view(result),changes:{measureId:input.measureId,note:'A recorded tally is not a certified vote and does not pass or fail a measure.',reason:input.reason}};
+      return {entityId:id,result:this.view(result),changes:{measureId:input.measureId,previous:{yesCount:existing?.yesCount??null,noCount:existing?.noCount??null,abstainCount:existing?.abstainCount??null},yesCount:input.yesCount,noCount:input.noCount,abstainCount:input.abstainCount,note:'A recorded tally is not a certified vote and does not pass or fail a measure.',reason:input.reason}};
     })};
   }
   async calendar(r:AuthRequest,q:unknown) {
-    const {page,limit}=paginationSchema.parse(q);
-    const events:{id:string;kind:string;reference:string;title:string;venue:string;scheduledAt:Date;state:string;ownerLabel:string}[]=[];
-    if(canMunicipality(r.principal,'session.view')) {
-      const sessions=await this.ctx.db.legislativeSession.findMany({where:this.scope(r),include:{term:{select:{label:true}}}});
-      for(const row of sessions) events.push({id:row.id,kind:'SESSION',reference:row.reference,title:row.title,venue:row.venue,scheduledAt:row.scheduledAt,state:row.state,ownerLabel:row.term.label});
-    }
-    if(canMunicipality(r.principal,'committee.meeting.view') || assignedCommitteeIds(r.principal,'committee.meeting.view').length) {
-      const committeeIds=canMunicipality(r.principal,'committee.meeting.view')?undefined:assignedCommitteeIds(r.principal,'committee.meeting.view');
-      const meetings=await this.ctx.db.committeeMeeting.findMany({where:{...this.scope(r),...(committeeIds?{committeeId:{in:committeeIds}}:{})},include:{committee:{select:{name:true}}}});
-      for(const row of meetings) events.push({id:row.id,kind:'MEETING',reference:row.reference,title:row.title,venue:row.venue,scheduledAt:row.scheduledAt,state:row.state,ownerLabel:row.committee.name});
-    }
-    if(!canMunicipality(r.principal,'session.view') && !canMunicipality(r.principal,'committee.meeting.view') && !assignedCommitteeIds(r.principal,'committee.meeting.view').length) fail(403,'ACCESS_DENIED','You do not have access to this action.');
-    events.sort((a,b)=>b.scheduledAt.getTime()-a.scheduledAt.getTime()||b.id.localeCompare(a.id));
-    const total=events.length;
+    const {page,limit,from,to}=calendarQuerySchema.parse(q);
+    const seeSessions=canMunicipality(r.principal,'session.view');
+    const meetingCommittees=canMunicipality(r.principal,'committee.meeting.view')?undefined:assignedCommitteeIds(r.principal,'committee.meeting.view');
+    const seeMeetings=meetingCommittees===undefined || meetingCommittees.length>0;
+    if(!seeSessions && !seeMeetings) fail(403,'ACCESS_DENIED','You do not have access to this action.');
+    const window=from||to?{scheduledAt:{...(from?{gte:new Date(from)}:{}),...(to?{lt:new Date(to)}:{})}}: {};
+    const take=page*limit;
+    const sessionWhere={...this.scope(r),...window};
+    const meetingWhere={...this.scope(r),...(meetingCommittees?{committeeId:{in:meetingCommittees}}:{}),...window};
+    const sessions=seeSessions?await this.ctx.db.legislativeSession.findMany({where:sessionWhere,include:{term:{select:{label:true}}},orderBy:[{scheduledAt:'desc'},{id:'desc'}],take}):[];
+    const meetings=seeMeetings?await this.ctx.db.committeeMeeting.findMany({where:meetingWhere,include:{committee:{select:{name:true}}},orderBy:[{scheduledAt:'desc'},{id:'desc'}],take}):[];
+    const sessionTotal=seeSessions?await this.ctx.db.legislativeSession.count({where:sessionWhere}):0;
+    const meetingTotal=seeMeetings?await this.ctx.db.committeeMeeting.count({where:meetingWhere}):0;
+    const events=[
+      ...sessions.map(row=>({id:row.id,kind:'SESSION',reference:row.reference,title:row.title,venue:row.venue,scheduledAt:row.scheduledAt,state:row.state,ownerLabel:row.term.label})),
+      ...meetings.map(row=>({id:row.id,kind:'MEETING',reference:row.reference,title:row.title,venue:row.venue,scheduledAt:row.scheduledAt,state:row.state,ownerLabel:row.committee.name})),
+    ].sort((a,b)=>b.scheduledAt.getTime()-a.scheduledAt.getTime()||b.id.localeCompare(a.id));
     const items=events.slice((page-1)*limit,page*limit).map(item=>({...item,scheduledAt:item.scheduledAt.toISOString()}));
-    return {items,pageInfo:{page,limit,total}};
+    return {items,pageInfo:{page,limit,total:sessionTotal+meetingTotal}};
   }
   private async addAgenda(tx:Prisma.TransactionClient,r:AuthRequest,sessionId:string,measureIds:string[],start:number) {
     if(new Set(measureIds).size!==measureIds.length) fail(422,'DUPLICATE_MEASURE','A measure can appear on a session agenda only once.');
     for(const [index,measureId] of measureIds.entries()) {
       const measure=await tx.legislativeMeasure.findFirst({where:{id:measureId,...this.scope(r)}});
       if(!measure?.currentVersionId) fail(404,'NOT_FOUND','Measure not found or has no current version.');
+      if(measure.stage!=='SUBMITTED') fail(422,'MEASURE_NOT_SUBMITTED','Only a submitted measure can be placed on a sitting. A draft or withdrawn measure stays off the agenda.');
       if(await tx.sessionAgendaItem.findFirst({where:{sessionId,measureId}})) fail(409,'CONFLICT','This measure is already on the session agenda.');
       await tx.sessionAgendaItem.create({data:{id:randomUUID(),municipalityId:r.principal.municipalityId,sessionId,measureId,measureVersionId:measure.currentVersionId,sequence:start+index+1}});
     }

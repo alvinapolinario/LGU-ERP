@@ -33,6 +33,6 @@ No readings, sessions, voting, mayoral action, public portal, official number se
 
 ## Local run additions
 
-Optional MinIO: `docker compose -f infrastructure/docker/compose.dev.yml --profile object-storage up -d`. Bind loopback only. Set `MINIO_ENDPOINT=http://127.0.0.1:9000` with keys matching `MINIO_ROOT_*`. Uploads without MinIO return 503. Restore dumps without an object inventory are incomplete if any upload intent exists.
+MinIO starts with `docker compose -f infrastructure/docker/compose.dev.yml up -d` and binds loopback `127.0.0.1:9000` and `9001`. Set `MINIO_ENDPOINT=http://127.0.0.1:9000` with `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` matching `MINIO_ROOT_*`. Uploads return 503 when those keys or the process are missing. Restore dumps without an object inventory are incomplete if any upload intent exists.
 
 Profile `P2-DRAFT-INTERIM` is an engineering allowlist, not adopted Internal Rules of Procedure (D-02).

@@ -52,6 +52,20 @@ export async function bootstrap():Promise<void> {
   app.use((req:AuthRequest,res:import('express').Response,next:()=>void)=>{req.correlationId=randomUUID();res.setHeader('X-Correlation-Id',req.correlationId);res.setHeader('Cache-Control','no-store');next();});
   app.use((req:express.Request,res:express.Response,next:express.NextFunction)=>{
     const path=(req.originalUrl??req.url).split('?')[0]??'';
+    if(!path.startsWith('/api/v1/public')) return next();
+    const ip=req.ip||'local';
+    const key=`ltas:public-rate:${ip}`;
+    void redis.incr(key).then(async count=>{
+      if(count===1) await redis.expire(key,60);
+      if(count>120) {
+        res.status(429).type('application/problem+json').json({type:'urn:ltas:problem:RATE_LIMITED',title:'RATE_LIMITED',status:429,detail:'The public catalog is receiving too many requests from this network. Wait a minute and try again.',code:'RATE_LIMITED',instance:path});
+        return;
+      }
+      next();
+    }).catch(()=>next());
+  });
+  app.use((req:express.Request,res:express.Response,next:express.NextFunction)=>{
+    const path=(req.originalUrl??req.url).split('?')[0]??'';
     if(req.method==='PUT' && /\/api\/v1\/documents\/intents\/[^/]+\/content$/.test(path)) {
       return express.raw({type:()=>true,limit:26*1024*1024})(req,res,next);
     }

@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { idSchema, measureCreateSchema, measureEditSchema, measureVersionSchema, paginationSchema, reviewSchema, taskCompleteSchema } from '@ltas/contracts';
+import { idSchema, measureCreateSchema, measureEditSchema, measureVersionSchema, paginationSchema, reviewSchema, taskCompleteSchema, taskQuerySchema } from '@ltas/contracts';
 import { CONTEXT, type AppContext } from './context.js';
 import { Commands } from './commands.js';
 import { assignedCommitteeIds, canMunicipality, measureVisibility, requirePermission } from './access.js';
@@ -158,8 +158,9 @@ export class MeasuresService {
     })};
   }
   async tasks(r:AuthRequest,q:unknown) {
-    const {page,limit}=paginationSchema.parse(q);
-    const where=this.taskWhere(r);
+    const {page,limit,ownerId,measureId}=taskQuerySchema.parse(q);
+    const caseFilter=ownerId||measureId?{OR:[...(ownerId?[{ownerId}]:[]),...(measureId?[{measureId}]:[])]}:{};
+    const where={AND:[this.taskWhere(r),caseFilter]};
     const [items,total]=await this.ctx.db.$transaction([this.ctx.db.workTask.findMany({where,skip:(page-1)*limit,take:limit,orderBy:{createdAt:'desc'}}),this.ctx.db.workTask.count({where})]);
     return {items,pageInfo:{page,limit,total}};
   }

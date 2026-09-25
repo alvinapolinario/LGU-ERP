@@ -21,10 +21,6 @@ export class LibraryService {
     if(canMunicipality(r.principal,permission) || assignedCommitteeIds(r.principal,permission).length) return;
     fail(403,'ACCESS_DENIED','You do not have access to this action.');
   }
-  private match(needle:string,...values:Array<string|null|undefined>) {
-    if(!needle) return true;
-    return values.some(value=>value?.toLowerCase().includes(needle));
-  }
   private measureWhere(r:AuthRequest) {return measureVisibility(r.principal);}
   private meetingWhere(r:AuthRequest) {
     if(canMunicipality(r.principal,'committee.meeting.view')) return this.scope(r);
@@ -36,47 +32,81 @@ export class LibraryService {
     const committeeIds=assignedCommitteeIds(r.principal,'committee.view');
     return committeeIds.length?{...this.scope(r),id:{in:committeeIds}}:null;
   }
+  private text(needle:string, fields:string[]) {
+    if(!needle) return {};
+    return {OR:fields.map(field=>({[field]:{contains:needle}}))};
+  }
+  private async slice<T>(count:number, cursor:{skip:number;need:number}, load:(skip:number,take:number)=>Promise<T[]>):Promise<T[]> {
+    if(cursor.need===0 || count===0 || cursor.skip>=count) {cursor.skip=Math.max(0,cursor.skip-count);return [];}
+    const skip=cursor.skip;
+    const take=Math.min(cursor.need,count-skip);
+    cursor.skip=0;
+    cursor.need-=take;
+    return load(skip,take);
+  }
   async search(r:AuthRequest,q:unknown) {
     this.gate(r,'library.view');
     const {page,limit,q:raw,kind}=libraryQuerySchema.parse(q);
-    const needle=raw.trim().toLowerCase();
+    const needle=raw.trim();
+    const include=(wanted:string)=>!kind || kind===wanted;
+    const cursor={skip:(page-1)*limit,need:limit};
     const hits:LibraryHit[]=[];
-    const include=(wanted:LibraryHit['kind'])=>!kind || kind===wanted;
+    let total=0;
     const measureWhere=this.measureWhere(r);
     if(include('MEASURE') && measureWhere) {
-      const rows=await this.ctx.db.legislativeMeasure.findMany({where:measureWhere,orderBy:{createdAt:'desc'},take:200});
-      for(const row of rows) if(this.match(needle,row.title,row.subject,row.typeCode,row.stage)) hits.push({id:row.id,kind:'MEASURE',title:row.title,detail:row.subject,state:row.stage});
+      const where={AND:[measureWhere,this.text(needle,['title','subject','typeCode','stage'])]};
+      const count=await this.ctx.db.legislativeMeasure.count({where});
+      total+=count;
+      const rows=await this.slice(count,cursor,(skip,take)=>this.ctx.db.legislativeMeasure.findMany({where,orderBy:{createdAt:'desc'},skip,take}));
+      for(const row of rows) hits.push({id:row.id,kind:'MEASURE',title:row.title,detail:row.subject,state:row.stage});
     }
     if(include('DOCUMENT') && (canMunicipality(r.principal,'document.view') || assignedCommitteeIds(r.principal,'document.view').length)) {
-      const rows=await this.documents.visible(r);
-      for(const row of rows) if(this.match(needle,row.title,row.ownerType)) hits.push({id:row.id,kind:'DOCUMENT',title:row.title,detail:row.ownerType,state:row.versions[0]?.validationState??'UNKNOWN'});
+      const pageRows=await this.documents.pageVisible(r,needle,0,1);
+      total+=pageRows.total;
+      const rows=await this.slice(pageRows.total,cursor,(skip,take)=>this.documents.pageVisible(r,needle,skip,take).then(result=>result.rows));
+      for(const row of rows) hits.push({id:row.id,kind:'DOCUMENT',title:row.title,detail:row.ownerType,state:row.versions[0]?.validationState??'UNKNOWN'});
     }
     if(include('SESSION') && canMunicipality(r.principal,'session.view')) {
-      const rows=await this.ctx.db.legislativeSession.findMany({where:this.scope(r),orderBy:{scheduledAt:'desc'},take:200});
-      for(const row of rows) if(this.match(needle,row.reference,row.title,row.venue,row.kind)) hits.push({id:row.id,kind:'SESSION',title:`${row.reference} · ${row.title}`,detail:row.venue,state:row.state});
+      const where={AND:[this.scope(r),this.text(needle,['reference','title','venue','kind'])]};
+      const count=await this.ctx.db.legislativeSession.count({where});
+      total+=count;
+      const rows=await this.slice(count,cursor,(skip,take)=>this.ctx.db.legislativeSession.findMany({where,orderBy:{scheduledAt:'desc'},skip,take}));
+      for(const row of rows) hits.push({id:row.id,kind:'SESSION',title:`${row.reference} · ${row.title}`,detail:row.venue,state:row.state});
     }
     if(include('MEETING')) {
-      const where=this.meetingWhere(r);
-      if(where) {
-        const rows=await this.ctx.db.committeeMeeting.findMany({where,include:{committee:{select:{name:true}}},orderBy:{scheduledAt:'desc'},take:200});
-        for(const row of rows) if(this.match(needle,row.reference,row.title,row.venue,row.committee.name)) hits.push({id:row.id,kind:'MEETING',title:`${row.reference} · ${row.title}`,detail:row.committee.name,state:row.state});
+      const base=this.meetingWhere(r);
+      if(base) {
+        const where={AND:[base,needle?{OR:[{reference:{contains:needle}},{title:{contains:needle}},{venue:{contains:needle}},{committee:{name:{contains:needle}}}]}:{}]};
+        const count=await this.ctx.db.committeeMeeting.count({where});
+        total+=count;
+        const rows=await this.slice(count,cursor,(skip,take)=>this.ctx.db.committeeMeeting.findMany({where,include:{committee:{select:{name:true}}},orderBy:{scheduledAt:'desc'},skip,take}));
+        for(const row of rows) hits.push({id:row.id,kind:'MEETING',title:`${row.reference} · ${row.title}`,detail:row.committee.name,state:row.state});
       }
     }
     if(include('COMMITTEE')) {
-      const where=this.committeeWhere(r);
-      if(where) {
-        const rows=await this.ctx.db.committee.findMany({where,orderBy:{name:'asc'},take:200});
-        for(const row of rows) if(this.match(needle,row.code,row.name)) hits.push({id:row.id,kind:'COMMITTEE',title:row.name,detail:row.code,state:'ACTIVE'});
+      const base=this.committeeWhere(r);
+      if(base) {
+        const where={AND:[base,this.text(needle,['code','name'])]};
+        const count=await this.ctx.db.committee.count({where});
+        total+=count;
+        const rows=await this.slice(count,cursor,(skip,take)=>this.ctx.db.committee.findMany({where,orderBy:{name:'asc'},skip,take}));
+        for(const row of rows) hits.push({id:row.id,kind:'COMMITTEE',title:row.name,detail:row.code,state:'ACTIVE'});
       }
     }
-    const total=hits.length;
-    return {items:hits.slice((page-1)*limit,page*limit),pageInfo:{page,limit,total}};
+    if(include('ORDINANCE') && canMunicipality(r.principal,'archive.view')) {
+      const where={AND:[this.scope(r),this.text(needle,['title','sourceNote','officialNumber','extractedText'])]};
+      const count=await this.ctx.db.historicalOrdinance.count({where});
+      total+=count;
+      const rows=await this.slice(count,cursor,(skip,take)=>this.ctx.db.historicalOrdinance.findMany({where,orderBy:[{officialYear:'desc'},{title:'asc'}],skip,take,select:{id:true,title:true,sourceNote:true,extractState:true}}));
+      for(const row of rows) hits.push({id:row.id,kind:'ORDINANCE',title:row.title,detail:row.sourceNote,state:row.extractState});
+    }
+    return {items:hits,pageInfo:{page,limit,total}};
   }
   async reports(r:AuthRequest) {
     this.gate(r,'report.view');
     const measureWhere=this.measureWhere(r);
     const meetingWhere=this.meetingWhere(r);
-    const [proposed,pending,draft,submitted,ordinance,resolution,sessionsScheduled,sessionsClosed,meetingsScheduled,meetingsClosed,present,absent,excused,votes,documents]=await Promise.all([
+    const [proposed,pending,draft,submitted,ordinance,resolution,sessionsScheduled,sessionsClosed,meetingsScheduled,meetingsClosed,present,absent,excused,votes,documents,register]=await Promise.all([
       measureWhere?this.ctx.db.legislativeMeasure.count({where:{...measureWhere,stage:{in:['DRAFT','SUBMITTED']}}}):0,
       measureWhere?this.ctx.db.legislativeMeasure.count({where:{...measureWhere,referrals:{some:{disposition:'OPEN'}}}}):0,
       measureWhere?this.ctx.db.legislativeMeasure.count({where:{...measureWhere,stage:'DRAFT'}}):0,
@@ -91,7 +121,8 @@ export class LibraryService {
       canMunicipality(r.principal,'session.view')?this.ctx.db.sessionAttendance.count({where:{...this.scope(r),disposition:'ABSENT'}}):0,
       canMunicipality(r.principal,'session.view')?this.ctx.db.sessionAttendance.count({where:{...this.scope(r),disposition:'EXCUSED'}}):0,
       canMunicipality(r.principal,'vote.view')?this.ctx.db.sessionVote.count({where:this.scope(r)}):0,
-      (canMunicipality(r.principal,'document.view') || assignedCommitteeIds(r.principal,'document.view').length)?(await this.documents.visible(r)).length:0,
+      (canMunicipality(r.principal,'document.view') || assignedCommitteeIds(r.principal,'document.view').length)?(await this.documents.pageVisible(r,'',0,1)).total:0,
+      canMunicipality(r.principal,'archive.view')?this.ctx.db.historicalOrdinance.count({where:this.scope(r)}):0,
     ]);
     const metrics:ReportMetric[]=[
       {key:'measures.proposed',label:'Proposed measures',value:proposed,definition:'Distinct visible measures in DRAFT or SUBMITTED. Same definition as the dashboard Proposed Measures KPI.'},
@@ -109,6 +140,7 @@ export class LibraryService {
       {key:'attendance.excused',label:'Recorded excused rows',value:excused,definition:'Session attendance rows marked EXCUSED.'},
       {key:'votes.recorded',label:'Recorded tallies',value:votes,definition:'Secretary-entered session tallies. Result is always RECORDED and does not pass or fail a measure.'},
       {key:'documents.quarantined',label:'Quarantined documents',value:documents,definition:'Case files the caller can already see. Uploads stay quarantined (D-13). Not the official archive.'},
+      {key:'ordinances.register',label:'Historical ordinance rows',value:register,definition:'Rows in the historical ordinance register the caller can view. A typed number is not an official series, and a scan is not a certified copy.'},
     ];
     return {data:{definitionVersion:REPORT_DEFINITION,asOf:new Date().toISOString(),timezone:'Asia/Manila',warnings:[...warnings],metrics}};
   }

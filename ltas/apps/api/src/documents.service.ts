@@ -74,18 +74,23 @@ export class DocumentsService {
     },committeeId)};
   }
   async storeContent(r:AuthRequest,rawId:string,body:Buffer) {
-    requirePermission(r.principal,'document.upload',{...this.scope(r),committeeId:this.documentCommittee(r,'document.upload')});
     const id=idSchema.parse(rawId);
+    const reason=reasonSchema.parse(r.get('x-audit-reason'));
     if(body.length===0 || body.length>maxBytes) fail(422,'FILE_TOO_LARGE','Each file must be between 1 byte and 25 MiB (proposed cap).');
-    const session=await this.ctx.db.uploadSession.findFirst({where:{id,...this.scope(r),uploaderId:r.principal.id}});
-    if(!session || session.status!=='OPEN' || session.expiresAt<=new Date()) fail(404,'NOT_FOUND','Upload intent not found or expired.');
-    if(body.length>session.expectedBytes) fail(422,'FILE_TOO_LARGE','The upload exceeds the declared size.');
-    const detected=detectMime(body,session.declaredMime);
-    if(detected!==session.declaredMime) fail(422,'UNSUPPORTED_TYPE','The file signature does not match the declared type.');
+    const preview=await this.ctx.db.uploadSession.findFirst({where:{id,...this.scope(r),uploaderId:r.principal.id}});
+    if(!preview || preview.expiresAt<=new Date() || (preview.status!=='OPEN' && preview.status!=='STORED')) fail(404,'NOT_FOUND','Upload intent not found or expired.');
+    if(body.length>preview.expectedBytes) fail(422,'FILE_TOO_LARGE','The upload exceeds the declared size.');
+    const detected=detectMime(body,preview.declaredMime);
+    if(detected!==preview.declaredMime) fail(422,'UNSUPPORTED_TYPE','The file signature does not match the declared type.');
+    const sha256=createHash('sha256').update(body).digest('hex');
     const bucket=this.ctx.config.MINIO_BUCKET_QUARANTINE;
-    await this.ctx.store.put(bucket,session.quarantineKey,body,detected);
-    await this.ctx.db.uploadSession.update({where:{id},data:{status:'STORED'}});
-    return {data:{id,bytes:body.length,sha256:createHash('sha256').update(body).digest('hex')}};
+    const data=await this.commands.execute(r,'document.upload','document.content-stored',{id,sha256,bytes:body.length,detectedMime:detected,reason},async tx=>{
+      const claimed=await tx.uploadSession.updateMany({where:{id,...this.scope(r),uploaderId:r.principal.id,status:'OPEN',expiresAt:{gt:new Date()}},data:{status:'STORED'}});
+      if(claimed.count!==1) fail(409,'UPLOAD_ALREADY_STORED','This upload intent already received file bytes. Create a new intent to send a different file.');
+      await this.ctx.store.put(bucket,preview.quarantineKey,body,detected);
+      return {entityId:id,result:{id,bytes:body.length,sha256},changes:{sha256,bytes:body.length,detectedMime:detected,filename:preview.originalFilename,reason}};
+    },this.documentCommittee(r,'document.upload'));
+    return {data};
   }
   async finalize(r:AuthRequest,rawId:string,body:unknown) {
     const id=idSchema.parse(rawId);
@@ -143,19 +148,38 @@ export class DocumentsService {
     const items=await this.ctx.db.document.findMany({where:{ownerType,ownerId,municipalityId:r.principal.municipalityId},include:{versions:{orderBy:{sequence:'desc'},take:1}}});
     return {items:items.map(row=>({id:row.id,title:row.title,classification:row.classification,currentReadyVersionId:row.currentReadyVersionId,latestState:row.versions[0]?.validationState??'UNKNOWN'}))};
   }
+  async pageVisible(r:AuthRequest, needle:string, skip:number, take:number) {
+    const where=await this.documentWhere(r);
+    const filtered=needle?{AND:[where,{OR:[{title:{contains:needle}},{ownerType:{contains:needle}}]}]}:where;
+    const [rows,total]=await this.ctx.db.$transaction([
+      this.ctx.db.document.findMany({where:filtered,include:{versions:{orderBy:{sequence:'desc' as const},take:1}},orderBy:{createdAt:'desc'},skip,take}),
+      this.ctx.db.document.count({where:filtered}),
+    ]);
+    return {rows,total};
+  }
   async visible(r:AuthRequest) {
+    const where=await this.documentWhere(r);
+    return this.ctx.db.document.findMany({where,include:{versions:{orderBy:{sequence:'desc' as const},take:1}},orderBy:{createdAt:'desc'}});
+  }
+  private async documentWhere(r:AuthRequest) {
     requirePermission(r.principal,'document.view',{...this.scope(r),committeeId:this.documentCommittee(r,'document.view')});
-    const rows=await this.ctx.db.document.findMany({where:this.scope(r),include:{versions:{orderBy:{sequence:'desc'},take:1}},orderBy:{createdAt:'desc'}});
-    const visible=[];
-    for(const row of rows) {
-      try {if(row.ownerType==='MEASURE') {if(!await this.ctx.db.legislativeMeasure.findFirst({where:{id:row.ownerId,...this.visibleMeasure(r)}})) continue;} else await this.assertOwner(r,row.ownerType,row.ownerId); visible.push(row);} catch {continue;}
-    }
-    return visible;
+    if(canMunicipality(r.principal,'document.view')) return this.scope(r);
+    const committeeIds=assignedCommitteeIds(r.principal,'document.view');
+    const meetings=await this.ctx.db.committeeMeeting.findMany({where:{...this.scope(r),committeeId:{in:committeeIds}},select:{id:true}});
+    return {municipalityId:r.principal.municipalityId,OR:[
+      {ownerType:'MEASURE',measure:{referrals:{some:{committeeId:{in:committeeIds}}}}},
+      {ownerType:'COMMITTEE',ownerId:{in:committeeIds}},
+      {ownerType:'MEETING',ownerId:{in:meetings.map(row=>row.id)}},
+    ]};
   }
   async list(r:AuthRequest,q:unknown) {
     const {page,limit}=paginationSchema.parse(q);
-    const visible=await this.visible(r);
-    const items=visible.slice((page-1)*limit,page*limit).map(row=>({id:row.id,title:row.title,classification:row.classification,currentReadyVersionId:row.currentReadyVersionId,latestState:row.versions[0]?.validationState??'UNKNOWN',ownerType:row.ownerType,ownerId:row.ownerId}));
-    return {items,pageInfo:{page,limit,total:visible.length}};
+    const where=await this.documentWhere(r);
+    const [rows,total]=await this.ctx.db.$transaction([
+      this.ctx.db.document.findMany({where,include:{versions:{orderBy:{sequence:'desc' as const},take:1}},orderBy:{createdAt:'desc'},skip:(page-1)*limit,take:limit}),
+      this.ctx.db.document.count({where}),
+    ]);
+    const items=rows.map(row=>({id:row.id,title:row.title,classification:row.classification,currentReadyVersionId:row.currentReadyVersionId,latestState:row.versions[0]?.validationState??'UNKNOWN',ownerType:row.ownerType,ownerId:row.ownerId}));
+    return {items,pageInfo:{page,limit,total}};
   }
 }
